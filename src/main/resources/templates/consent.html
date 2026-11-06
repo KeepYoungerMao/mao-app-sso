@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head th:replace="~{fragments/layout :: head('授权确认 - mao-app-sso')}"></head>
+<body>
+
+<nav th:replace="~{fragments/layout :: navbar('consent')}"></nav>
+
+<main class="page-container narrow">
+  <section class="card" aria-labelledby="consent-title">
+    <h1 id="consent-title">授权确认</h1>
+    <p>
+      应用 <strong th:text="${clientName}">第三方应用</strong>
+      （client_id: <code th:text="${clientId}">client-id</code>）请求访问您的以下信息：
+    </p>
+
+    <form th:action="@{/oauth2/authorize}" method="post" id="consent-form">
+      <input type="hidden" name="client_id" th:value="${clientId}">
+      <input type="hidden" name="state" th:value="${state}">
+
+      <fieldset class="scope-list">
+        <legend>请求的权限范围</legend>
+        <label th:each="scope : ${scopes}" class="scope-item" th:for="'scope-' + ${scope.code}">
+          <input type="checkbox" checked th:id="'scope-' + ${scope.code}" name="scope" th:value="${scope.code}">
+          <span>
+            <strong th:text="${scope.code}">openid</strong>
+            <span class="muted" th:text="${scope.description}">权限描述</span>
+          </span>
+        </label>
+      </fieldset>
+
+      <div class="button-group">
+        <button type="submit" class="button primary">同意授权</button>
+        <button type="submit" class="button secondary" id="deny-button">拒绝授权</button>
+      </div>
+      <p class="muted small">提示：取消勾选后提交“同意授权”等同于仅授权勾选的范围；点击“拒绝授权”将直接返回 access_denied。</p>
+    </form>
+  </section>
+</main>
+
+<script th:src="@{/js/consent.js}" defer></script>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+
+</body>
+</html>

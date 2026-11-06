@@ -1,0 +1,70 @@
+spring:
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  thymeleaf:
+    cache: false
+
+server:
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        name: SSO_SESSION
+        http-only: true
+        same-site: Lax
+
+sso:
+  # 测试环境允许临时签名密钥（每次运行生成新密钥，Token 仅在当次运行内有效）
+  jwk:
+    allow-ephemeral: true
+  issuer-url: http://localhost:8080
+
+  # 动态客户端注册：测试环境开启，白名单与主线配置保持一致
+  dcr:
+    enabled: true
+    require-authentication: false
+    allowed-scopes: "openid,profile,email,userId,userInfo,aksk,mcp:read"
+    allowed-grant-types: authorization_code,refresh_token
+    allowed-client-authentication-methods: none,client_secret_basic
+    allowed-redirect-uri-patterns:
+      - '^https://.+'
+      - '^http://(localhost|127\.0\.0\.1)(:\d+)?/.+'
+      - '^(?!http)[a-zA-Z][a-zA-Z0-9+.\-]*://.+'
+    max-registrations-per-minute: 30
+    force-proof-key: true
+    force-authorization-consent: true
+
+  # 发现元数据：测试环境宣告与 DCR 白名单一致的 scope 集合
+  metadata:
+    scopes-supported: "openid,profile,email,userId,userInfo,aksk,mcp:read"
+    allow-public-clients: true
+    cors-enabled: true
+    cors-allowed-origins: "*"
+
+  # OAuth 客户端初始化配置（测试专用值，非真实凭据）
+  clients:
+    - client-id: test-web-client
+      client-secret: test-web-secret
+      client-name: Test Web Client
+      client-authentication-methods: client_secret_basic
+      authorization-grant-types: authorization_code,refresh_token
+      redirect-uris: http://localhost/callback,https://oauth.pstmn.io/v1/callback
+      scopes: openid,profile,email
+      require-authorization-consent: true
+      require-proof-key: true
+
+logging:
+  level:
+    root: WARN
+    com.mao.sso: INFO
+    org.springframework.security: WARN

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head th:replace="~{fragments/layout :: head('首页 - mao-app-sso')}"></head>
+<body>
+
+<nav th:replace="~{fragments/layout :: navbar('home')}"></nav>
+
+<main class="page-container">
+  <section class="card">
+    <h1>mao-app-sso 认证中心</h1>
+    <p class="muted">OAuth 2.1 / OpenID Connect 1.0 统一身份认证服务</p>
+
+    <div sec:authorize="isAuthenticated()">
+      <h2>当前用户</h2>
+      <dl class="info-grid">
+        <dt>用户名</dt>
+        <dd th:text="${principal.username}">username</dd>
+        <dt>显示名称</dt>
+        <dd th:text="${profile.displayName}">display name</dd>
+        <dt>邮箱</dt>
+        <dd th:text="${profile.email}">user@example.com</dd>
+        <dt>角色</dt>
+        <dd>
+          <span class="badge" th:each="authority : ${principal.authorities}"
+                th:text="${authority.authority}">ROLE_USER</span>
+        </dd>
+      </dl>
+      <div class="button-group">
+        <a class="button secondary" th:href="@{/profile}">个人资料</a>
+        <a sec:authorize="hasRole('ROLE_ADMIN')" class="button secondary" th:href="@{/admin/users}">用户管理</a>
+        <a sec:authorize="hasRole('ROLE_ADMIN')" class="button secondary" th:href="@{/admin/clients}">客户端管理</a>
+      </div>
+    </div>
+
+    <div sec:authorize="isAnonymous()">
+      <p>您尚未登录。</p>
+      <a class="button primary" th:href="@{/login}">立即登录</a>
+    </div>
+  </section>
+
+  <section class="card" sec:authorize="isAuthenticated()">
+    <h2>OAuth 2.1 / OIDC 服务端点</h2>
+    <dl class="info-grid">
+      <dt>授权端点</dt><dd><code>/oauth2/authorize</code></dd>
+      <dt>Token 端点</dt><dd><code>/oauth2/token</code></dd>
+      <dt>JWKS</dt><dd><code>/oauth2/jwks</code></dd>
+      <dt>OAuth 元数据</dt><dd><code>/.well-known/oauth-authorization-server</code></dd>
+      <dt>OIDC 配置</dt><dd><code>/.well-known/openid-configuration</code></dd>
+      <dt>UserInfo</dt><dd><code>/userinfo</code></dd>
+    </dl>
+  </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+
+</body>
+</html>

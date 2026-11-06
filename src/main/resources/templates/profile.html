@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head th:replace="~{fragments/layout :: head('个人资料 - mao-app-sso')}"></head>
+<body>
+
+<nav th:replace="~{fragments/layout :: navbar('profile')}"></nav>
+
+<main class="page-container">
+  <section class="card" aria-labelledby="profile-title">
+    <h1 id="profile-title">个人资料</h1>
+
+    <div th:if="${successMessage}" class="alert alert-success" role="status" th:text="${successMessage}">操作成功</div>
+
+    <h2>账户信息</h2>
+    <dl class="info-grid">
+      <dt>用户名</dt>
+      <dd th:text="${user.username}">username</dd>
+      <dt>邮箱</dt>
+      <dd th:text="${user.email}">user@example.com</dd>
+      <dt>角色</dt>
+      <dd>
+        <span class="badge" th:each="role : ${user.roles}" th:text="${role.code}">ROLE_USER</span>
+      </dd>
+      <dt>账户状态</dt>
+      <dd>
+        <span class="badge" th:classappend="${user.enabled} ? 'badge-success' : 'badge-danger'"
+              th:text="${user.enabled} ? '已启用' : '已禁用'">已启用</span>
+        <span class="badge" th:classappend="${user.accountLocked} ? 'badge-danger' : 'badge-success'"
+              th:text="${user.accountLocked} ? '已锁定' : '未锁定'">未锁定</span>
+        <span class="badge" th:classappend="${user.credentialsExpired} ? 'badge-danger' : 'badge-success'"
+              th:text="${user.credentialsExpired} ? '密码已过期' : '密码有效'">密码有效</span>
+      </dd>
+      <dt>注册时间</dt>
+      <dd th:text="${#temporals.format(user.createdAt, 'yyyy-MM-dd HH:mm:ss')}">2026-01-01 00:00:00</dd>
+    </dl>
+  </section>
+
+  <section class="card" aria-labelledby="profile-form-title">
+    <h2 id="profile-form-title">修改显示名称</h2>
+
+    <div th:if="${#fields.hasErrors('profileForm.displayName')}" class="alert alert-error" role="alert">
+      <ul class="error-list">
+        <li th:each="err : ${#fields.errors('profileForm.displayName')}" th:text="${err}">校验错误</li>
+      </ul>
+    </div>
+
+    <form th:action="@{/profile}" th:object="${profileForm}" method="post" novalidate>
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+      <div class="form-field">
+        <label for="displayName">显示名称</label>
+        <input type="text" id="displayName" th:field="*{displayName}" maxlength="100"
+               required aria-describedby="displayName-help" th:errorclass="field-error">
+        <p id="displayName-help" class="muted small">1-100 个字符，将展示在授权确认页中。</p>
+      </div>
+
+      <button type="submit" class="button primary">保存</button>
+    </form>
+  </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+
+</body>
+</html>

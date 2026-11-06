@@ -1,0 +1,124 @@
+spring:
+  application:
+    name: mao-app-sso
+  profiles:
+    default: dev
+
+  datasource:
+    url: ${SSO_DATASOURCE_URL:jdbc:mysql://localhost:3306/mao_sso}
+    username: ${SSO_DATASOURCE_USERNAME:root}
+    password: ${SSO_DATASOURCE_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # MySQL 连接参数（逐个配置，避免 URL 巨串）
+    # preserveInstants/connectionTimeZone 保证 Instant 以 UTC 存取
+    # （Spring Authorization Server 官方 schema 注释中的 MySQL 强制要求）
+    hikari:
+      data-source-properties:
+        useSSL: ${SSO_DB_USE_SSL:false}
+        allowPublicKeyRetrieval: ${SSO_DB_ALLOW_PUBLIC_KEY:true}
+        preserveInstants: true
+        connectionTimeZone: UTC
+        forceConnectionTimeZoneToSession: true
+        # TLS 双向认证（生产环境开启 SSO_DB_USE_SSL=true 时生效）
+        sslMode: ${SSO_DB_SSL_MODE:VERIFY_CA}
+        trustCertificateKeyStoreUrl: ${SSO_DB_TRUSTSTORE_URL:file:src/main/resources/certs/truststore.p12}
+        trustCertificateKeyStorePassword: ${SSO_DB_TRUSTSTORE_PASSWORD:maoappsso}
+        clientCertificateKeyStoreUrl: ${SSO_DB_KEYSTORE_URL:file:src/main/resources/certs/client-keystore.p12}
+        clientCertificateKeyStorePassword: ${SSO_DB_KEYSTORE_PASSWORD:maoappsso}
+
+  jpa:
+    hibernate:
+      # 表结构由 Flyway 管理，运行时只校验不生成
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: false
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+
+  thymeleaf:
+    # 开发期便于调页面可关闭；生产必须开启缓存
+    cache: ${SSO_THYMELEAF_CACHE:true}
+    check-template: ${SSO_THYMELEAF_CHECK_TEMPLATE:true}
+  web:
+    error:
+      include-message: never
+      include-stacktrace: never
+      include-binding-errors: never
+      include-exception: false
+      whitelabel:
+        enabled: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        name: SSO_SESSION
+        http-only: true
+        same-site: Lax
+        # 仅当以 HTTPS 对外提供服务时开启（生产环境必须开启）
+        secure: ${SSO_SESSION_COOKIE_SECURE:false}
+
+# ==================== 业务配置（均可通过环境变量覆盖） ====================
+sso:
+  # Authorization Server 对外 Issuer，必须与浏览器实际访问地址一致。
+  # 默认值取 127.0.0.1 而非 localhost：资源服务器（MCP 等）在受保护资源元数据里宣告的
+  # authorization_servers 用的是 IP 形式；RFC 8414 要求元数据中的 issuer 必须与该标识
+  # 逐字符相等，否则严格的客户端会在发现阶段直接放弃。
+  issuer-url: ${SSO_ISSUER_URL:http://127.0.0.1:8080}
+
+  # 是否启用 HSTS 响应头（仅 HTTPS 部署时开启，生产环境必须开启）
+  hsts-enabled: ${SSO_HSTS_ENABLED:false}
+
+  # JWT 签名密钥：生产环境必须配置持久化 JWK Set（JSON 文件），
+  # 未配置时仅 dev profile 允许生成临时密钥（重启后历史 Token 失效）
+  jwk:
+    location: ${SSO_JWK_LOCATION:}
+    password: ${SSO_JWK_PASSWORD:}
+
+  token:
+    access-token-ttl: ${SSO_ACCESS_TOKEN_TTL:PT15M}
+    refresh-token-ttl: ${SSO_REFRESH_TOKEN_TTL:P30D}
+    authorization-code-ttl: ${SSO_AUTHORIZATION_CODE_TTL:PT5M}
+    # OAuth 2.1 最佳实践：刷新时轮换 refresh token（默认关闭复用）
+    reuse-refresh-tokens: ${SSO_REUSE_REFRESH_TOKENS:false}
+
+  # 开发环境管理员初始化（幂等）。密码必须通过环境变量提供，代码中不存在任何默认密码
+  admin:
+    username: ${SSO_ADMIN_USERNAME:admin}
+    email: ${SSO_ADMIN_EMAIL:admin@mao.local}
+    display-name: ${SSO_ADMIN_DISPLAY_NAME:系统管理员}
+    password: ${SSO_ADMIN_PASSWORD:admin}
+
+  # ---- 动态客户端注册（RFC 7591 / OIDC DCR）----
+  # 所有客户端必须在管理后台预先录入。DCR 端点的作用是：
+  # 客户端提交 redirect_uri，服务端查表返回对应的固定 client_id。
+  # 未预录入的 redirect_uri 会被拒绝。
+  dcr:
+    enabled: ${SSO_DCR_ENABLED:true}
+    require-authentication: ${SSO_DCR_REQUIRE_AUTHENTICATION:false}
+    max-registrations-per-minute: ${SSO_DCR_RATE_LIMIT:30}
+
+  # ---- 发现元数据（RFC 8414）对外宣告内容 ----
+  # SAS 默认不宣告 scopes_supported，也不宣告 public client（auth_method=none），
+  # 而 MCP / 桌面 / 移动端客户端几乎都是 public client，缺失会导致客户端在发现阶段就放弃。
+  metadata:
+    scopes-supported: ${SSO_METADATA_SCOPES:openid,profile,email}
+    allow-public-clients: ${SSO_METADATA_ALLOW_PUBLIC_CLIENTS:true}
+    cors-enabled: ${SSO_METADATA_CORS_ENABLED:true}
+    cors-allowed-origins: ${SSO_METADATA_CORS_ORIGINS:*}
+
+logging:
+  level:
+    root: INFO
+    com.mao.sso: ${SSO_LOG_LEVEL:INFO}
+    org.springframework.security: ${SSO_SECURITY_LOG_LEVEL:INFO}
+    com.mysql.cj.protocol: DEBUG

@@ -1,0 +1,29 @@
+# 生产环境 profile：
+# 1. 必须通过 SSO_JWK_LOCATION(+SSO_JWK_PASSWORD) 配置持久化签名密钥，禁止临时密钥
+# 2. 必须通过 SSO_ISSUER_URL 配置真实对外域名（HTTPS）
+# 3. 必须通过 SSO_ADMIN_PASSWORD / SSO_CLIENT_SECRET 等环境变量提供凭据
+sso:
+  jwk:
+    allow-ephemeral: false
+  hsts-enabled: true
+  # 生产默认不开放动态客户端注册；确需开放时必须显式设置 SSO_DCR_ENABLED=true，
+  # 并强烈建议同时设置 SSO_DCR_REQUIRE_AUTHENTICATION=true（仅管理员可登记客户端）
+  dcr:
+    enabled: ${SSO_DCR_ENABLED:false}
+    require-authentication: ${SSO_DCR_REQUIRE_AUTHENTICATION:true}
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+spring:
+  thymeleaf:
+    cache: true
+
+logging:
+  level:
+    root: WARN
+    com.mao.sso: INFO
+    org.springframework.security: WARN

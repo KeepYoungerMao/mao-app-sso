@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head th:replace="~{fragments/layout :: head('登出成功 - mao-app-sso')}"></head>
+<body>
+
+<nav th:replace="~{fragments/layout :: navbar('logout')}"></nav>
+
+<main class="page-container narrow">
+  <section class="card" aria-labelledby="logout-title">
+    <h1 id="logout-title">已安全退出</h1>
+    <p>您已成功退出登录，会话已失效。</p>
+    <a class="button primary" th:href="@{/login}">重新登录</a>
+  </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+
+</body>
+</html>
