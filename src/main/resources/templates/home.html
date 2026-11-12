@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
-<head th:replace="~{fragments/layout :: head('首页 - mao-app-sso')}"></head>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" lang="zh-CN">
+<head th:replace="~{fragments/layout :: head('首页 - mao-app-sso')}">
+  <title>mao-app-sso 认证中心</title>
+</head>
 <body>
 
 <nav th:replace="~{fragments/layout :: navbar('home')}"></nav>
