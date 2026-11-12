@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
 import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
@@ -14,16 +13,20 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.stereotype.Component;
 
 import com.mao.sso.user.User;
-import com.mao.sso.user.UserRepository;
+import com.mao.sso.user.mapper.UserMapper;
 
 /**
  * JWT Claims 定制：为 Access Token 与 ID Token 添加最小化业务 Claims。
  *
  * <ul>
- *   <li>Access Token：{@code roles}（用户角色码列表，供资源服务器做粗粒度授权）；</li>
- *   <li>ID Token：{@code name}、{@code preferred_username}，email scope 授权时附加
- *       {@code email}、{@code email_verified}。{@code sub} 由框架设置为用户名。</li>
+ *   <li>Access Token：{@code roles}（用户角色 code 列表，如 {@code ["admin"]}，
+ *       供资源服务器/管理 API 做授权——本项目<b>按角色授权，不按 scope</b>）；</li>
+ *   <li>ID Token：{@code name}、{@code preferred_username}。{@code sub} 由框架设置为用户名。</li>
  * </ul>
+ *
+ * <p>本项目只定义 {@code openid} / {@code profile} 两个 scope，{@code profile} 决定
+ * ID Token 是否携带 {@code name} / {@code preferred_username}（由框架的 scope 裁剪负责），
+ * 因此这里不需要额外按 scope 分支。</p>
  *
  * <p>Principal 为 Spring Security 内置 {@link UserDetails}（授权记录持久化要求），
  * 业务属性（id/email/displayName）按用户名从数据库查询补充。</p>
@@ -36,10 +39,10 @@ import com.mao.sso.user.UserRepository;
 @Component
 public class JwtClaimsCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
-	private final UserRepository userRepository;
+	private final UserMapper userMapper;
 
-	public JwtClaimsCustomizer(UserRepository userRepository) {
-		this.userRepository = userRepository;
+	public JwtClaimsCustomizer(UserMapper userMapper) {
+		this.userMapper = userMapper;
 	}
 
 	@Override
@@ -52,7 +55,7 @@ public class JwtClaimsCustomizer implements OAuth2TokenCustomizer<JwtEncodingCon
 		if (username == null || username.isBlank()) {
 			return;
 		}
-		User user = this.userRepository.findByUsernameWithRoles(username).orElse(null);
+		User user = this.userMapper.findByUsernameWithRoles(username).orElse(null);
 		if (user == null) {
 			return;
 		}
@@ -60,16 +63,15 @@ public class JwtClaimsCustomizer implements OAuth2TokenCustomizer<JwtEncodingCon
 			// 注意：claims 会被持久化到 oauth2_authorization.access_token_metadata，
 			// Spring Security 的 Jackson 多态类型校验仅允许特定集合类型，
 			// 因此使用 ArrayList（而非 List.of() 的 ImmutableCollections$ListN）
-			List<String> roles = new ArrayList<>(user.getRoles().stream().map((role) -> role.getCode()).toList());
+			List<String> roles = new ArrayList<>(user.getRoleCodes());
 			java.util.Collections.sort(roles);
 			context.getClaims().claim("roles", roles);
 		}
 		else if (OidcParameterNames.ID_TOKEN.equals(context.getTokenType().getValue())) {
-			context.getClaims().claim("name", user.getDisplayName());
-			context.getClaims().claim("preferred_username", user.getUsername());
-			if (context.getAuthorizedScopes().contains(OidcScopes.EMAIL)) {
-				context.getClaims().claim("email", user.getEmail());
-				context.getClaims().claim("email_verified", true);
+			// 仅 openid / profile 两个 scope，profile 携带身份画像
+			if (context.getAuthorizedScopes().contains(OidcScopes.PROFILE)) {
+				context.getClaims().claim("name", user.getDisplayName());
+				context.getClaims().claim("preferred_username", user.getUsername());
 			}
 		}
 	}

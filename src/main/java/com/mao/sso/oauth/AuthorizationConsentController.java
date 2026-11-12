@@ -7,6 +7,8 @@ import java.util.Map;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.stereotype.Controller;
+
+import com.mao.sso.exception.InvalidRequestException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
@@ -26,8 +28,9 @@ import org.springframework.web.servlet.ModelAndView;
 @Controller
 public class AuthorizationConsentController {
 
+	/** 本服务只定义 openid / profile 两个 scope（仅影响 claims 裁剪，不参与鉴权）。 */
 	private static final Map<String, String> SCOPE_DESCRIPTIONS = Map.of("openid", "登录并识别您的身份（OpenID Connect）",
-			"profile", "查看您的基本资料（显示名称等）", "email", "查看您的电子邮箱地址");
+			"profile", "查看您的基本资料（显示名称等）");
 
 	private final RegisteredClientRepository registeredClientRepository;
 
@@ -40,7 +43,7 @@ public class AuthorizationConsentController {
 			@RequestParam("scope") String scope, @RequestParam("state") String state) {
 		RegisteredClient client = this.registeredClientRepository.findByClientId(clientId);
 		if (client == null) {
-			throw new IllegalArgumentException("未知的客户端: " + clientId);
+			throw new InvalidRequestException("未知的客户端: " + clientId);
 		}
 		List<Map<String, String>> scopes = List.of(scope.split(" "))
 			.stream()

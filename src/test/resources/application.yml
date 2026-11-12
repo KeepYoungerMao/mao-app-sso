@@ -2,15 +2,8 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    clean-disabled: false
     locations: classpath:db/migration
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
-    properties:
-      hibernate:
-        jdbc:
-          time_zone: UTC
   thymeleaf:
     cache: false
 
@@ -23,45 +16,39 @@ server:
         http-only: true
         same-site: Lax
 
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    jdbc-type-for-null: NULL
+    default-fetch-size: 100
+
 sso:
   # 测试环境允许临时签名密钥（每次运行生成新密钥，Token 仅在当次运行内有效）
   jwk:
     allow-ephemeral: true
   issuer-url: http://localhost:8080
 
-  # 动态客户端注册：测试环境开启，白名单与主线配置保持一致
+  # 动态客户端注册：测试环境开启。
+  # 语义为「预录入 + 按 redirect_uri 查表」，请求参数不得超出预录入范围；
+  # 因此不再有 scope / grant_type / redirect_uri 正则白名单等配置项。
   dcr:
     enabled: true
-    require-authentication: false
-    allowed-scopes: "openid,profile,email,userId,userInfo,aksk,mcp:read"
-    allowed-grant-types: authorization_code,refresh_token
-    allowed-client-authentication-methods: none,client_secret_basic
-    allowed-redirect-uri-patterns:
-      - '^https://.+'
-      - '^http://(localhost|127\.0\.0\.1)(:\d+)?/.+'
-      - '^(?!http)[a-zA-Z][a-zA-Z0-9+.\-]*://.+'
     max-registrations-per-minute: 30
-    force-proof-key: true
-    force-authorization-consent: true
 
-  # 发现元数据：测试环境宣告与 DCR 白名单一致的 scope 集合
+  # 发现元数据：本服务只定义 openid / profile 两个 scope（仅用于 claims 裁剪）
   metadata:
-    scopes-supported: "openid,profile,email,userId,userInfo,aksk,mcp:read"
+    scopes-supported: "openid,profile"
     allow-public-clients: true
     cors-enabled: true
     cors-allowed-origins: "*"
 
-  # OAuth 客户端初始化配置（测试专用值，非真实凭据）
-  clients:
-    - client-id: test-web-client
-      client-secret: test-web-secret
-      client-name: Test Web Client
-      client-authentication-methods: client_secret_basic
-      authorization-grant-types: authorization_code,refresh_token
-      redirect-uris: http://localhost/callback,https://oauth.pstmn.io/v1/callback
-      scopes: openid,profile,email
-      require-authorization-consent: true
-      require-proof-key: true
+  # 管理 API：测试环境开启，鉴权按角色（roles claim 含 ADMIN）
+  admin-api:
+    enabled: true
+    client-id: mao-app-admin
+    required-role: ADMIN
+    cors-allowed-origins: "*"
 
 logging:
   level:

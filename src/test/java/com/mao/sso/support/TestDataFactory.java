@@ -34,7 +34,7 @@ public final class TestDataFactory {
 		String rawPassword = "Passw0rd-" + UUID.randomUUID().toString().substring(0, 8);
 		Set<String> roles = new LinkedHashSet<>(java.util.Arrays.asList(roleCodes));
 		if (roles.isEmpty()) {
-			roles.add(UserService.ROLE_USER);
+			roles.add(UserService.ROLE_CUSTOMER);
 		}
 		userService.createUser(username, username + "@mao.local", rawPassword, "测试用户 " + username, roles);
 		return rawPassword;

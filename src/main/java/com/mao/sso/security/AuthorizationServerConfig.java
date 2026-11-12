@@ -27,7 +27,6 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.token.DelegatingOAuth2TokenGenerator;
@@ -37,6 +36,7 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.util.StringUtils;
 
 import com.mao.sso.config.SsoProperties;
+import com.mao.sso.oauth.PagingRegisteredClientRepository;
 import com.mao.sso.oauth.PublicClientRefreshTokenGenerator;
 
 /**
@@ -190,11 +190,12 @@ public class AuthorizationServerConfig {
 	}
 
 	/**
-	 * OAuth 客户端仓库：官方 JDBC 实现（表 oauth2_registered_client）。
+	 * OAuth 客户端仓库：官方 JDBC 实现（表 oauth2_registered_client）的扩展版，
+	 * 额外提供「整页单条 SQL」与「按回调地址反查」两类查询，避免 N+1。
 	 */
 	@Bean
-	public RegisteredClientRepository registeredClientRepository(JdbcTemplate jdbcTemplate) {
-		return new JdbcRegisteredClientRepository(jdbcTemplate);
+	public PagingRegisteredClientRepository registeredClientRepository(JdbcTemplate jdbcTemplate) {
+		return new PagingRegisteredClientRepository(jdbcTemplate);
 	}
 
 	/**

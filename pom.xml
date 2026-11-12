@@ -13,24 +13,26 @@
 	<version>1.0.0</version>
 	<name>mao-app-sso</name>
 	<description>OAuth 2.1 / OpenID Connect 1.0 unified authentication center</description>
+	<url>https://github.com/KeepYoungerMao/mao-app-sso</url>
+	<licenses>
+		<license>
+			<name>Apache License, Version 2.0</name>
+			<url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+	<scm>
+		<connection>scm:git:https://github.com/KeepYoungerMao/mao-app-sso.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/KeepYoungerMao/mao-app-sso.git</developerConnection>
+		<url>https://github.com/KeepYoungerMao/mao-app-sso</url>
+	</scm>
 
 	<properties>
 		<java.version>25</java.version>
-		<!-- 与 Spring Boot 4.1.1 BOM 中 testcontainers.version 保持一致，升级 Boot 时需同步 -->
-		<testcontainers.version>2.0.5</testcontainers.version>
+		<!-- MyBatis Starter 不在 Spring Boot BOM 中管理，必须显式声明版本。
+		     版本对应关系：Boot 3.2~3.5 → 3.0.x；Boot 4.0 → 4.0.x；Boot 4.1 → 4.1.x -->
+		<mybatis-spring-boot.version>4.1.0</mybatis-spring-boot.version>
 	</properties>
-
-	<dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>org.testcontainers</groupId>
-				<artifactId>testcontainers-bom</artifactId>
-				<version>${testcontainers.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
 
 	<dependencies>
 		<!-- Web 层：Spring Boot 4 起 starter-web 更名为 starter-webmvc -->
@@ -51,9 +53,13 @@
 			<artifactId>spring-boot-starter-security-oauth2-authorization-server</artifactId>
 		</dependency>
 
+		<!-- 持久层：MyBatis（替代原 Spring Data JPA）。Starter 会传递引入
+		     spring-boot-starter-jdbc（HikariCP + JdbcTemplate），
+		     Spring Authorization Server 的 Jdbc* 实现仍然依赖 JdbcTemplate，两者共存。 -->
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa</artifactId>
+			<groupId>org.mybatis.spring.boot</groupId>
+			<artifactId>mybatis-spring-boot-starter</artifactId>
+			<version>${mybatis-spring-boot.version}</version>
 		</dependency>
 
 		<dependency>
@@ -99,56 +105,29 @@
 			<version>1.86</version>
 		</dependency>
 
+		<!-- Lombok：仅在编译期生成 getter/setter 等样板代码，provided 不进运行时 jar。
+		     版本由 Boot BOM 管理（1.18.48）。
+		     注意：项目已显式配置 maven-compiler-plugin 的 annotationProcessorPaths，
+		     只声明本依赖而不把 lombok 加进 processorPaths，Lombok 会**静默失效**（不报错、不生成代码）。 -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<scope>provided</scope>
+		</dependency>
+
 		<!-- ==================== 测试依赖 ==================== -->
+		<!-- 说明：已移除 H2 与 Testcontainers，测试直接连接本地 MySQL 测试库
+		     （见 IntegrationTestSupport，默认 jdbc:mysql://127.0.0.1:3306/mao_sso_test）。 -->
 
-		<!-- H2：仅用于无 Docker 环境下的集成测试回退（MySQL 兼容模式），
-		     生产与默认测试环境均使用 MySQL（Testcontainers） -->
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<scope>test</scope>
-		</dependency>
-
-		<!-- Testcontainers：MySQL 集成测试容器（2.x 起 artifact 名带 testcontainers- 前缀） -->
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>testcontainers-mysql</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>testcontainers-junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security-oauth2-authorization-server-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-thymeleaf-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-validation-test</artifactId>
-			<scope>test</scope>
-		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- csrf() / SecurityMockMvcRequestPostProcessors 由现有 MockMvc 流程测试使用，不可移除 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -163,15 +142,22 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
+					<!-- 显式声明 processorPaths 后，javac 只从这里查找注解处理器：
+					     JDK 23 起隐式注解处理默认关闭，classpath 上的处理器不会被自动发现。
+					     Lombok 必须列在此处，否则完全不生效。 -->
 					<annotationProcessorPaths>
 						<path>
 							<groupId>org.springframework.boot</groupId>
 							<artifactId>spring-boot-configuration-processor</artifactId>
 						</path>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</path>
 					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
-			<!-- 统一测试时区为 UTC，保证 MySQL/H2 中 Instant 存取语义一致 -->
+			<!-- 统一测试时区为 UTC，保证 MySQL 中 Instant 存取语义一致 -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>

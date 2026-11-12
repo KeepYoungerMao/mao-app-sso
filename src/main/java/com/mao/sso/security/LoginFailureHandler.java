@@ -24,7 +24,9 @@ public class LoginFailureHandler extends SimpleUrlAuthenticationFailureHandler {
 	private static final Logger log = LoggerFactory.getLogger(LoginFailureHandler.class);
 
 	public LoginFailureHandler() {
-		setDefaultFailureUrl("/login?error");
+		// 必须带 =true：?error 是「空值参数」，Spring 把它转成 boolean 时会抛
+		// MethodArgumentTypeMismatchException（Invalid boolean value []），登录页直接 500
+		setDefaultFailureUrl("/login?error=true");
 	}
 
 	@Override

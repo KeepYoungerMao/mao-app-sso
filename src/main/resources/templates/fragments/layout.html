@@ -16,10 +16,6 @@
          th:text="${active == 'home'} ? '首页' : '首页'">首页</a>
       <span sec:authorize="isAuthenticated()">
         <a th:href="@{/profile}" th:classappend="${active == 'profile'} ? 'active' : ''">个人资料</a>
-        <a sec:authorize="hasRole('ROLE_ADMIN')" th:href="@{/admin/users}"
-           th:classappend="${active == 'admin'} ? 'active' : ''">用户管理</a>
-        <a sec:authorize="hasRole('ROLE_ADMIN')" th:href="@{/admin/clients}"
-           th:classappend="${active == 'admin-clients'} ? 'active' : ''">客户端管理</a>
         <form class="nav-logout" th:action="@{/logout}" method="post">
           <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
           <button type="submit" class="link-button">退出登录</button>

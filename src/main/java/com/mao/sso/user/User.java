@@ -1,155 +1,92 @@
 package com.mao.sso.user;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.mao.sso.common.BaseEntity;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
- * 用户实体。密码仅以 Argon2id 哈希形式存储（password_hash），不存在明文密码。
+ * 用户领域对象（纯 POJO，由 MyBatis 映射）。
  *
- * <p>账户四态（enabled / account_locked / account_expired / credentials_expired）
- * 与 Spring Security UserDetails 契约一一对应，由 {@link com.mao.sso.security.SsoUserDetails} 适配。</p>
+ * <p>密码仅以 Argon2id 哈希形式存储（password_hash），不存在明文密码。</p>
+ *
+ * <p>账户状态语义：</p>
+ * <ul>
+ *   <li>{@code enabled}：账户是否启用；</li>
+ *   <li>{@code accountLocked}：是否被锁定（如连续登录失败、管理员操作）；</li>
+ *   <li>{@code accountExpired}：账户本身是否过期（如外包/临时账号）；</li>
+ *   <li>{@code credentialsExpiredAt}：密码到期时间，为空表示永不过期。
+ *       到期后登录直接被拒绝（映射为 Spring Security 的 credentialsExpired）；</li>
+ *   <li>{@code mustChangePassword}：软标记，登录成功后引导用户自助改密，不阻断登录。</li>
+ * </ul>
+ *
+ * <p><b>只使用 {@code @Getter} / {@code @Setter}，禁止使用 {@code @Data}：</b>
+ * 实体是可变对象且 {@code passwordHash} 属于敏感字段，{@code @Data} 生成的
+ * {@code toString()} / {@code equals()} 既会泄漏哈希值，也会因可变字段导致集合行为异常。</p>
+ *
+ * <p>本类无 {@code final} 字段：MyBatis 依赖无参构造 + setter 映射，
+ * 若引入 {@code final} 字段，Lombok 将只生成全参构造，映射会直接失败。</p>
  */
-@Entity
-@Table(name = "users", uniqueConstraints = {
-		@UniqueConstraint(name = "uk_users_username", columnNames = "username"),
-		@UniqueConstraint(name = "uk_users_email", columnNames = "email") })
+@Getter
+@Setter
 public class User extends BaseEntity {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long id;
+	private Integer id;
 
-	@NotBlank
-	@Size(max = 50)
-	@Pattern(regexp = "^[a-zA-Z0-9][a-zA-Z0-9._-]{1,49}$", message = "用户名只能包含字母、数字、点、下划线、连字符，且长度 2-50")
-	@Column(name = "username", nullable = false, length = 50)
 	private String username;
 
-	@NotBlank
-	@Email
-	@Size(max = 255)
-	@Column(name = "email", nullable = false, length = 255)
 	private String email;
 
+	/** 手机号（可空）。 */
+	private String phone;
+
+	/** 头像地址（可空）。 */
+	private String avatar;
+
 	/** Argon2id 哈希值，永不为明文。 */
-	@NotBlank
-	@Size(max = 255)
-	@Column(name = "password_hash", nullable = false, length = 255)
 	private String passwordHash;
 
-	@NotBlank
-	@Size(max = 100)
-	@Column(name = "display_name", nullable = false, length = 100)
 	private String displayName;
 
-	@Column(name = "enabled", nullable = false)
 	private boolean enabled = true;
 
-	@Column(name = "account_locked", nullable = false)
 	private boolean accountLocked = false;
 
-	@Column(name = "account_expired", nullable = false)
 	private boolean accountExpired = false;
 
-	@Column(name = "credentials_expired", nullable = false)
-	private boolean credentialsExpired = false;
+	/** 上次登录时间（可空）。 */
+	private Instant lastLoginAt;
 
-	@ManyToMany(fetch = jakarta.persistence.FetchType.LAZY)
-	@JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"),
-			inverseJoinColumns = @JoinColumn(name = "role_id"))
-	private Set<Role> roles = new LinkedHashSet<>();
+	/** 是否需要在下次登录后修改密码。 */
+	private boolean mustChangePassword = false;
 
-	public Long getId() {
-		return this.id;
+	/** 密码到期时间，为空表示永不过期。 */
+	private Instant credentialsExpiredAt;
+
+	/** 角色列表；分页查询时不填充，详情/登录查询时填充。 */
+	private List<Role> roles = new ArrayList<>();
+
+	/**
+	 * 手写 setter：保持「永不置空」的既有语义。
+	 *
+	 * <p>Lombok 检测到同名方法后会跳过生成，因此这里必须保留，
+	 * 否则 {@code getRoleCodes()} 会在 roles 为 null 时 NPE。</p>
+	 */
+	public void setRoles(List<Role> roles) {
+		this.roles = (roles != null) ? roles : new ArrayList<>();
 	}
 
-	public String getUsername() {
-		return this.username;
-	}
-
-	public void setUsername(String username) {
-		this.username = username;
-	}
-
-	public String getEmail() {
-		return this.email;
-	}
-
-	public void setEmail(String email) {
-		this.email = email;
-	}
-
-	public String getPasswordHash() {
-		return this.passwordHash;
-	}
-
-	public void setPasswordHash(String passwordHash) {
-		this.passwordHash = passwordHash;
-	}
-
-	public String getDisplayName() {
-		return this.displayName;
-	}
-
-	public void setDisplayName(String displayName) {
-		this.displayName = displayName;
-	}
-
-	public boolean isEnabled() {
-		return this.enabled;
-	}
-
-	public void setEnabled(boolean enabled) {
-		this.enabled = enabled;
-	}
-
-	public boolean isAccountLocked() {
-		return this.accountLocked;
-	}
-
-	public void setAccountLocked(boolean accountLocked) {
-		this.accountLocked = accountLocked;
-	}
-
-	public boolean isAccountExpired() {
-		return this.accountExpired;
-	}
-
-	public void setAccountExpired(boolean accountExpired) {
-		this.accountExpired = accountExpired;
-	}
-
+	/** 密码是否已过期（为空表示永不过期）。 */
 	public boolean isCredentialsExpired() {
-		return this.credentialsExpired;
+		return this.credentialsExpiredAt != null && !this.credentialsExpiredAt.isAfter(Instant.now());
 	}
 
-	public void setCredentialsExpired(boolean credentialsExpired) {
-		this.credentialsExpired = credentialsExpired;
-	}
-
-	public Set<Role> getRoles() {
-		return this.roles;
-	}
-
-	public void setRoles(Set<Role> roles) {
-		this.roles = roles;
+	/** 角色码列表，便于组装 JWT claims 与权限。 */
+	public List<String> getRoleCodes() {
+		return this.roles.stream().map(Role::getCode).toList();
 	}
 
 }

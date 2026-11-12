@@ -1,51 +1,68 @@
+# ============================================================================
+#  mao-app-sso 配置文件（单文件）
+#
+#  本文件是「测试环境」基线，随 jar 打包。生产环境不修改本文件，而是在 jar 同级
+#  config/ 目录（或容器挂载 / K8s ConfigMap）放一份 application.yml 覆盖差异项。
+#  需要覆盖哪些 key，见文件末尾「生产环境配置覆盖清单」。
+#
+#  生效顺序（后者覆盖前者；按 key 逐项合并，不是整份替换）：
+#      jar 内 application.yml  →  config/application.yml  →  环境变量 / 系统属性
+#
+#  注意：外挂文件只写差异项即可，未写的 key 会继续使用本文件的测试值。
+#  应急时也可用 Spring 标准环境变量覆盖（如 SPRING_DATASOURCE_URL、LOGGING_LEVEL_ROOT），
+#  但本文件不再声明任何环境变量占位符。
+# ============================================================================
+
 spring:
   application:
     name: mao-app-sso
-  profiles:
-    default: dev
 
+  # --------------------------------------------------------------------------
+  # 数据源（测试环境：本机 MySQL）
+  # 【生产】改成真实库地址与账号，并开启 SSL
+  # --------------------------------------------------------------------------
   datasource:
-    url: ${SSO_DATASOURCE_URL:jdbc:mysql://localhost:3306/mao_sso}
-    username: ${SSO_DATASOURCE_USERNAME:root}
-    password: ${SSO_DATASOURCE_PASSWORD:root}
+    url: jdbc:mysql://localhost:3306/mao_sso
+    username: root
+    password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
     # MySQL 连接参数（逐个配置，避免 URL 巨串）
-    # preserveInstants/connectionTimeZone 保证 Instant 以 UTC 存取
+    # preserveInstants / connectionTimeZone 保证 Instant 以 UTC 存取
     # （Spring Authorization Server 官方 schema 注释中的 MySQL 强制要求）
     hikari:
       data-source-properties:
-        useSSL: ${SSO_DB_USE_SSL:false}
-        allowPublicKeyRetrieval: ${SSO_DB_ALLOW_PUBLIC_KEY:true}
+        # 加密开关：Connector/J 8.0.13 起 sslMode 取代已废弃的 useSSL，只认这一个。
+        #   本地 / 同机 Docker 网络 → DISABLED
+        #   【生产】→ VERIFY_CA（加密 + 验服务器证书由 truststore 里的 CA 签发）
+        #            若生产用稳定域名连接、且能确认证书 SAN 覆盖该域名，可升到
+        #            VERIFY_IDENTITY（多验一层主机名，能挡「同 CA 的其它证书冒充」）。
+        #            用 IP 连接或无法确认 SAN 时必须留在 VERIFY_CA，否则启动即连不上。
+        sslMode: VERIFY_CA
+        # 仅在非 TLS 通道下用于 caching_sha2_password 向服务器索取 RSA 公钥；
+        # 开着等于允许对方用自签公钥换到明文口令。
+        # 【生产】sslMode 开启 TLS 后改成 false
+        allowPublicKeyRetrieval: false
         preserveInstants: true
         connectionTimeZone: UTC
         forceConnectionTimeZoneToSession: true
-        # TLS 双向认证（生产环境开启 SSO_DB_USE_SSL=true 时生效）
-        sslMode: ${SSO_DB_SSL_MODE:VERIFY_CA}
-        trustCertificateKeyStoreUrl: ${SSO_DB_TRUSTSTORE_URL:file:src/main/resources/certs/truststore.p12}
-        trustCertificateKeyStorePassword: ${SSO_DB_TRUSTSTORE_PASSWORD:maoappsso}
-        clientCertificateKeyStoreUrl: ${SSO_DB_KEYSTORE_URL:file:src/main/resources/certs/client-keystore.p12}
-        clientCertificateKeyStorePassword: ${SSO_DB_KEYSTORE_PASSWORD:maoappsso}
-
-  jpa:
-    hibernate:
-      # 表结构由 Flyway 管理，运行时只校验不生成
-      ddl-auto: validate
-    open-in-view: false
-    properties:
-      hibernate:
-        jdbc:
-          time_zone: UTC
+        # TLS 双向认证：只有服务器端配置了 REQUIRE X509 才需要 client-keystore；
+        # 单向 TLS（只验服务器）仅用 truststore 即可。
+        # 【生产】证书库必须在仓库外，按实际挂载点改路径；密码不要写进仓库
+        trustCertificateKeyStoreUrl: file:D:/certs/mysql/truststore.p12
+        trustCertificateKeyStorePassword: maoappsso
+        clientCertificateKeyStoreUrl: file:D:/certs/mysql/client-keystore.p12
+        clientCertificateKeyStorePassword: maoappsso
 
   flyway:
-    enabled: false
+    enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
     validate-on-migrate: true
 
   thymeleaf:
-    # 开发期便于调页面可关闭；生产必须开启缓存
-    cache: ${SSO_THYMELEAF_CACHE:true}
-    check-template: ${SSO_THYMELEAF_CHECK_TEMPLATE:true}
+    cache: false                           # 【生产】true（生产必须开启模板缓存）
+    check-template: true
+
   web:
     error:
       include-message: never
@@ -56,7 +73,7 @@ spring:
         enabled: false
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: 8080
   servlet:
     session:
       timeout: 30m
@@ -64,61 +81,153 @@ server:
         name: SSO_SESSION
         http-only: true
         same-site: Lax
-        # 仅当以 HTTPS 对外提供服务时开启（生产环境必须开启）
-        secure: ${SSO_SESSION_COOKIE_SECURE:false}
+        # 【生产】true —— 仅当以 HTTPS 对外提供服务时才能开启
+        secure: false
 
-# ==================== 业务配置（均可通过环境变量覆盖） ====================
+# ==================== 业务配置 ====================
 sso:
-  # Authorization Server 对外 Issuer，必须与浏览器实际访问地址一致。
-  # 默认值取 127.0.0.1 而非 localhost：资源服务器（MCP 等）在受保护资源元数据里宣告的
+  # Authorization Server 对外 Issuer，必须与浏览器实际访问地址逐字符一致。
+  # 默认取 127.0.0.1 而非 localhost：资源服务器（MCP 等）在受保护资源元数据里宣告的
   # authorization_servers 用的是 IP 形式；RFC 8414 要求元数据中的 issuer 必须与该标识
   # 逐字符相等，否则严格的客户端会在发现阶段直接放弃。
-  issuer-url: ${SSO_ISSUER_URL:http://127.0.0.1:8080}
+  # 【生产】改成真实对外域名（HTTPS），且与反向代理后的访问地址一致
+  issuer-url: http://127.0.0.1:8080
 
-  # 是否启用 HSTS 响应头（仅 HTTPS 部署时开启，生产环境必须开启）
-  hsts-enabled: ${SSO_HSTS_ENABLED:false}
+  # 是否启用 HSTS 响应头
+  # 【生产】true —— 仅在整站 HTTPS 时开启，否则浏览器会拒绝回退到 HTTP
+  hsts-enabled: false
 
-  # JWT 签名密钥：生产环境必须配置持久化 JWK Set（JSON 文件），
-  # 未配置时仅 dev profile 允许生成临时密钥（重启后历史 Token 失效）
+  # JWT 签名密钥：持久化 JWK Set（JSON 文件）。
+  # 本地开发可以不配：把 location 置空即可，届时动态生成临时密钥，重启后历史 Token 全部失效。
+  # 当前写死本机生成器的输出路径；换机器 / 进容器必须改成实际路径 ——
+  # location 一旦有值就一定会去加载，文件不存在直接启动失败（不存在「找不到就回退」）。
+  # 生成 / 重建：运行 com.mao.sso.tools.JwkGenerator（无命令行参数）
   jwk:
-    location: ${SSO_JWK_LOCATION:}
-    password: ${SSO_JWK_PASSWORD:}
+    location: file:D:/certs/sso-jwk/jwk-set.json
+    # 仅当 location 指向 .p12 / .jks keystore 时才使用；明文 JSON 不需要密码
+    password: ""
+    # location 为空时是否允许临时密钥
+    # 【生产】false —— 未配持久化密钥则启动失败，绝不允许生产用临时密钥
+    allow-ephemeral: true
 
   token:
-    access-token-ttl: ${SSO_ACCESS_TOKEN_TTL:PT15M}
-    refresh-token-ttl: ${SSO_REFRESH_TOKEN_TTL:P30D}
-    authorization-code-ttl: ${SSO_AUTHORIZATION_CODE_TTL:PT5M}
+    access-token-ttl: PT15M
+    refresh-token-ttl: P30D
+    authorization-code-ttl: PT5M
     # OAuth 2.1 最佳实践：刷新时轮换 refresh token（默认关闭复用）
-    reuse-refresh-tokens: ${SSO_REUSE_REFRESH_TOKENS:false}
+    reuse-refresh-tokens: false
 
-  # 开发环境管理员初始化（幂等）。密码必须通过环境变量提供，代码中不存在任何默认密码
+  # 管理员账号（幂等）。角色与默认管理员由 Flyway V2 预置（admin / Admin@123456，首次登录强制改密）。
+  # 这里配置 password 时会在启动时覆盖预置密码（只覆盖一次，覆盖后清除「必须改密」标记）。
+  # 【生产】必须改 password，且只写在外挂配置里，禁止进仓库
   admin:
-    username: ${SSO_ADMIN_USERNAME:admin}
-    email: ${SSO_ADMIN_EMAIL:admin@mao.local}
-    display-name: ${SSO_ADMIN_DISPLAY_NAME:系统管理员}
-    password: ${SSO_ADMIN_PASSWORD:admin}
+    username: admin
+    email: admin@mao.local
+    display-name: 系统管理员
+    password: Admin@123456
 
   # ---- 动态客户端注册（RFC 7591 / OIDC DCR）----
   # 所有客户端必须在管理后台预先录入。DCR 端点的作用是：
-  # 客户端提交 redirect_uri，服务端查表返回对应的固定 client_id。
+  # 客户端提交 redirect_uri，服务端查表返回对应的固定 client_id（只读，不 INSERT、不下发 secret）。
   # 未预录入的 redirect_uri 会被拒绝。
+  # 端点一旦启用即匿名可调——这由它的消费方决定（MCP / CLI / 桌面端没有会话）。
+  # 需要限制来源请在网络层做（网关、内网、IP 白名单），不要指望登录态鉴权。
   dcr:
-    enabled: ${SSO_DCR_ENABLED:true}
-    require-authentication: ${SSO_DCR_REQUIRE_AUTHENTICATION:false}
-    max-registrations-per-minute: ${SSO_DCR_RATE_LIMIT:30}
+    # 【生产】二选一：
+    #   false → 客户端 client_id 离线写进配置，不开放端点（推荐，暴露面最小）
+    #   true  → MCP / 桌面端需要在运行时按 redirect_uri 自取 client_id
+    enabled: true
+    # 单客户端 IP 每分钟上限，0 表示不限
+    max-registrations-per-minute: 30
 
   # ---- 发现元数据（RFC 8414）对外宣告内容 ----
   # SAS 默认不宣告 scopes_supported，也不宣告 public client（auth_method=none），
   # 而 MCP / 桌面 / 移动端客户端几乎都是 public client，缺失会导致客户端在发现阶段就放弃。
   metadata:
-    scopes-supported: ${SSO_METADATA_SCOPES:openid,profile,email}
-    allow-public-clients: ${SSO_METADATA_ALLOW_PUBLIC_CLIENTS:true}
-    cors-enabled: ${SSO_METADATA_CORS_ENABLED:true}
-    cors-allowed-origins: ${SSO_METADATA_CORS_ORIGINS:*}
+    scopes-supported: "openid,profile"
+    allow-public-clients: true
+    cors-enabled: true
+    # 【生产】收窄为实际前端来源，不要留 *
+    cors-allowed-origins: "*"
+
+  # ---- 管理 API（/api/v1/admin/**）----
+  # 以 OAuth2 Resource Server 形态暴露：管理控制台先走授权码 + PKCE 拿 Token，
+  # 再以 Bearer 方式调用。授权按角色（Token 的 roles claim），不按 scope。
+  admin-api:
+    enabled: true
+    client-id: mao-app-admin
+    required-role: ADMIN
+    # 【生产】收窄为管理控制台的实际来源
+    cors-allowed-origins: "*"
+
+# ==================== MyBatis ====================
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    # 下划线列名 → 驼峰属性名（password_hash → passwordHash）
+    map-underscore-to-camel-case: true
+    # 允许 null 列正确写入，避免 MySQL 驱动在未知 JdbcType 时抛异常
+    jdbc-type-for-null: NULL
+    default-fetch-size: 100
 
 logging:
   level:
-    root: INFO
-    com.mao.sso: ${SSO_LOG_LEVEL:INFO}
-    org.springframework.security: ${SSO_SECURITY_LOG_LEVEL:INFO}
-    com.mysql.cj.protocol: DEBUG
+    root: INFO                                # 【生产】WARN
+    com.mao.sso: DEBUG                        # 【生产】INFO
+    com.mao.sso.user.mapper: DEBUG            # 【生产】INFO（或 WARN，避免打印每条 SQL）
+    org.springframework.security: INFO        # 【生产】WARN
+    # 保持 DEBUG 会输出 MySQL 协议级日志，生产必须降级
+    com.mysql.cj.protocol: DEBUG              # 【生产】INFO
+
+# ============================================================================
+#  生产环境配置覆盖清单
+#
+#  用法：把下列内容复制到 jar 同级 config/application.yml（或容器挂载点 / K8s ConfigMap），
+#        按需取消注释并填值。只写与本文件不同的项，未列出的继续使用本文件的值。
+# ============================================================================
+#
+# spring:
+#   datasource:
+#     url: jdbc:mysql://<生产库地址>:3306/mao_sso
+#     username: <用户名>
+#     password: <密码>
+#     hikari:
+#       data-source-properties:
+#         sslMode: VERIFY_CA                     # 有稳定域名且证书 SAN 覆盖它时可升 VERIFY_IDENTITY
+#         allowPublicKeyRetrieval: false          # TLS 下不需要换公钥；关掉可防非 TLS 降级
+#         trustCertificateKeyStoreUrl: file:/etc/sso/mysql/truststore.p12
+#         trustCertificateKeyStorePassword: <密码>
+#         clientCertificateKeyStoreUrl: file:/etc/sso/mysql/client-keystore.p12
+#         clientCertificateKeyStorePassword: <密码>
+#   thymeleaf:
+#     cache: true
+#
+# server:
+#   servlet:
+#     session:
+#       cookie:
+#         secure: true
+#
+# sso:
+#   issuer-url: https://sso.example.com
+#   hsts-enabled: true
+#   jwk:
+#     location: file:/etc/sso/jwk-set.json
+#     allow-ephemeral: false
+#   admin:
+#     password: <改掉初始密码>
+#   dcr:
+#     enabled: false                             # 或 true（客户端需运行时自取 client_id）
+#   metadata:
+#     cors-allowed-origins: https://console.example.com
+#   admin-api:
+#     cors-allowed-origins: https://console.example.com
+#
+# logging:
+#   level:
+#     root: WARN
+#     com.mao.sso: INFO
+#     com.mao.sso.user.mapper: INFO
+#     org.springframework.security: WARN
+#     com.mysql.cj.protocol: INFO
+# ============================================================================

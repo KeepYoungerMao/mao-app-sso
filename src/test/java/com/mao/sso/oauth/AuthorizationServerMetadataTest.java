@@ -42,12 +42,11 @@ class AuthorizationServerMetadataTest extends IntegrationTestSupport {
 	}
 
 	@Test
-	@DisplayName("元数据宣告 scopes_supported，包含业务 scope")
+	@DisplayName("元数据宣告 scopes_supported：只有 openid 与 profile")
 	void metadataDeclaresSupportedScopes() throws Exception {
 		this.mockMvc.perform(get(METADATA))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.scopes_supported", org.hamcrest.Matchers.hasItem("openid")))
-			.andExpect(jsonPath("$.scopes_supported", org.hamcrest.Matchers.hasItem("mcp:read")));
+			.andExpect(jsonPath("$.scopes_supported", org.hamcrest.Matchers.containsInAnyOrder("openid", "profile")));
 	}
 
 	@Test

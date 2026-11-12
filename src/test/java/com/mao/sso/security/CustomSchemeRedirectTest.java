@@ -81,7 +81,7 @@ class CustomSchemeRedirectTest extends IntegrationTestSupport {
 				"profile");
 		String username = "csr-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		PkcePair pkce = generatePkce();
 
 		MockHttpSession session = new MockHttpSession();
@@ -128,7 +128,7 @@ class CustomSchemeRedirectTest extends IntegrationTestSupport {
 				"profile");
 		String username = "csr-http-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		PkcePair pkce = generatePkce();
 
 		MockHttpSession session = new MockHttpSession();
@@ -152,7 +152,7 @@ class CustomSchemeRedirectTest extends IntegrationTestSupport {
 				"profile");
 		String username = "csr-get-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		PkcePair pkce = generatePkce();
 
 		MockHttpSession session = new MockHttpSession();
@@ -191,7 +191,7 @@ class CustomSchemeRedirectTest extends IntegrationTestSupport {
 				"profile");
 		String username = "csr-deny-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		PkcePair pkce = generatePkce();
 
 		MockHttpSession session = new MockHttpSession();

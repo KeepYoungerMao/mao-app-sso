@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -11,8 +13,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>敏感项（jwk.password、admin.password、clients[].client-secret）不提供默认值，
  * 必须通过环境变量注入，代码与仓库中不存在任何真实凭据。</p>
+ *
+ * <p><b>只使用 {@code @Getter} / {@code @Setter}，禁止使用 {@code @Data}：</b>
+ * {@code @Data} 会生成 {@code toString()}，把 {@code jwk.password} 与 {@code admin.password}
+ * 原样写进日志。</p>
  */
 @ConfigurationProperties(prefix = "sso")
+@Getter
+@Setter
 public class SsoProperties {
 
 	/** Authorization Server 对外 Issuer，必须与浏览器实际访问地址一致。 */
@@ -28,35 +36,11 @@ public class SsoProperties {
 
 	private final Metadata metadata = new Metadata();
 
-	public String getIssuerUrl() {
-		return this.issuerUrl;
-	}
-
-	public void setIssuerUrl(String issuerUrl) {
-		this.issuerUrl = issuerUrl;
-	}
-
-	public Jwk getJwk() {
-		return this.jwk;
-	}
-
-	public Token getToken() {
-		return this.token;
-	}
-
-	public Admin getAdmin() {
-		return this.admin;
-	}
-
-	public Dcr getDcr() {
-		return this.dcr;
-	}
-
-	public Metadata getMetadata() {
-		return this.metadata;
-	}
+	private final AdminApi adminApi = new AdminApi();
 
 	/** JWT 签名密钥配置。 */
+	@Getter
+	@Setter
 	public static class Jwk {
 
 		/**
@@ -74,33 +58,11 @@ public class SsoProperties {
 		 */
 		private boolean allowEphemeral = false;
 
-		public String getLocation() {
-			return this.location;
-		}
-
-		public void setLocation(String location) {
-			this.location = location;
-		}
-
-		public String getPassword() {
-			return this.password;
-		}
-
-		public void setPassword(String password) {
-			this.password = password;
-		}
-
-		public boolean isAllowEphemeral() {
-			return this.allowEphemeral;
-		}
-
-		public void setAllowEphemeral(boolean allowEphemeral) {
-			this.allowEphemeral = allowEphemeral;
-		}
-
 	}
 
 	/** Token 生命周期配置。 */
+	@Getter
+	@Setter
 	public static class Token {
 
 		private Duration accessTokenTtl = Duration.ofMinutes(15);
@@ -112,41 +74,11 @@ public class SsoProperties {
 		/** false 表示刷新时轮换 refresh token（OAuth 2.1 推荐）。 */
 		private boolean reuseRefreshTokens = false;
 
-		public Duration getAccessTokenTtl() {
-			return this.accessTokenTtl;
-		}
-
-		public void setAccessTokenTtl(Duration accessTokenTtl) {
-			this.accessTokenTtl = accessTokenTtl;
-		}
-
-		public Duration getRefreshTokenTtl() {
-			return this.refreshTokenTtl;
-		}
-
-		public void setRefreshTokenTtl(Duration refreshTokenTtl) {
-			this.refreshTokenTtl = refreshTokenTtl;
-		}
-
-		public Duration getAuthorizationCodeTtl() {
-			return this.authorizationCodeTtl;
-		}
-
-		public void setAuthorizationCodeTtl(Duration authorizationCodeTtl) {
-			this.authorizationCodeTtl = authorizationCodeTtl;
-		}
-
-		public boolean isReuseRefreshTokens() {
-			return this.reuseRefreshTokens;
-		}
-
-		public void setReuseRefreshTokens(boolean reuseRefreshTokens) {
-			this.reuseRefreshTokens = reuseRefreshTokens;
-		}
-
 	}
 
 	/** 初始管理员配置（初始化逻辑幂等）。 */
+	@Getter
+	@Setter
 	public static class Admin {
 
 		private String username = "admin";
@@ -158,38 +90,6 @@ public class SsoProperties {
 		/** 必须通过环境变量 SSO_ADMIN_PASSWORD 提供；为空则跳过初始化。 */
 		private String password = "";
 
-		public String getUsername() {
-			return this.username;
-		}
-
-		public void setUsername(String username) {
-			this.username = username;
-		}
-
-		public String getEmail() {
-			return this.email;
-		}
-
-		public void setEmail(String email) {
-			this.email = email;
-		}
-
-		public String getDisplayName() {
-			return this.displayName;
-		}
-
-		public void setDisplayName(String displayName) {
-			this.displayName = displayName;
-		}
-
-		public String getPassword() {
-			return this.password;
-		}
-
-		public void setPassword(String password) {
-			this.password = password;
-		}
-
 	}
 
 	/**
@@ -198,44 +98,21 @@ public class SsoProperties {
 	 * <p>所有客户端必须预先在管理后台录入才能注册/授权。DCR 端点的作用是：
 	 * 客户端提交 redirect_uri，服务端查表返回对应的固定 client_id。
 	 * 未预录入的 redirect_uri 会被拒绝（400 invalid_redirect_uri）。</p>
+	 *
+	 * <p>端点一旦启用即为匿名可调（{@code permitAll}）：它的消费方是 MCP、CLI、
+	 * 桌面端这类无会话的程序客户端，任何基于登录态的鉴权都会把它们挡住。
+	 * 需要限制来源时应在网络层（网关 / 内网 / IP 白名单）或 {@link #maxRegistrationsPerMinute}
+	 * 上做，不要在这里加开关。</p>
 	 */
+	@Getter
+	@Setter
 	public static class Dcr {
 
 		/** 是否启用动态客户端注册端点（/oauth2/register）。 */
 		private boolean enabled = false;
 
-		/**
-		 * 是否要求调用方已登录且具备 ADMIN 角色。
-		 * MCP 客户端等无凭据程序无法登录，需要开放注册时保持 false。
-		 */
-		private boolean requireAuthentication = false;
-
 		/** 单 IP 每分钟最大注册请求次数（仅频率保护，非白名单）；0 表示不限流。 */
 		private int maxRegistrationsPerMinute = 30;
-
-		public boolean isEnabled() {
-			return this.enabled;
-		}
-
-		public void setEnabled(boolean enabled) {
-			this.enabled = enabled;
-		}
-
-		public boolean isRequireAuthentication() {
-			return this.requireAuthentication;
-		}
-
-		public void setRequireAuthentication(boolean requireAuthentication) {
-			this.requireAuthentication = requireAuthentication;
-		}
-
-		public int getMaxRegistrationsPerMinute() {
-			return this.maxRegistrationsPerMinute;
-		}
-
-		public void setMaxRegistrationsPerMinute(int maxRegistrationsPerMinute) {
-			this.maxRegistrationsPerMinute = maxRegistrationsPerMinute;
-		}
 
 	}
 
@@ -247,13 +124,17 @@ public class SsoProperties {
 	 * 而 MCP / 桌面 / 移动端客户端普遍是 public client，且依赖元数据决定请求哪些 scope，
 	 * 缺失这两项会让严格的客户端在进入动态注册之前就放弃流程。</p>
 	 */
+	@Getter
+	@Setter
 	public static class Metadata {
 
 		/**
 		 * 宣告的 {@code scopes_supported}。留空表示不宣告该字段。
-		 * 建议与 {@code sso.dcr.allowed-scopes} 保持一致，避免「元数据允许、注册被拒」。
+		 *
+		 * <p>本服务只定义 {@code openid} 与 {@code profile} 两个 scope，且 scope 仅影响
+		 * OIDC claims 的裁剪，<b>不参与接口鉴权</b>（鉴权一律按角色）。</p>
 		 */
-		private List<String> scopesSupported = new ArrayList<>(List.of("openid", "profile", "email"));
+		private List<String> scopesSupported = new ArrayList<>(List.of("openid", "profile"));
 
 		/**
 		 * 是否在 {@code token_endpoint_auth_methods_supported} 中宣告 {@code none}。
@@ -272,37 +153,34 @@ public class SsoProperties {
 		/** CORS 允许的来源列表；{@code *} 表示任意来源。 */
 		private List<String> corsAllowedOrigins = new ArrayList<>(List.of("*"));
 
-		public List<String> getScopesSupported() {
-			return this.scopesSupported;
-		}
+	}
 
-		public void setScopesSupported(List<String> scopesSupported) {
-			this.scopesSupported = scopesSupported;
-		}
+	/**
+	 * 管理 API（{@code /api/v1/admin/**}）配置。
+	 *
+	 * <p>管理接口在本服务内以 OAuth2 Resource Server 形态暴露：调用方（管理控制台）
+	 * 先以授权码 + PKCE 登录拿到 Access Token，再以 Bearer 方式调用。</p>
+	 *
+	 * <p><b>授权模型：按角色，不按 scope。</b>本服务只定义 {@code openid} / {@code profile}
+	 * 两个 scope，它们仅用于 OIDC claims 裁剪，不参与接口鉴权。管理接口要求 Access Token 的
+	 * {@code roles} claim 中包含 {@link #requiredRole}（默认 {@code ADMIN}），
+	 * 该 claim 由 {@code JwtClaimsCustomizer} 从用户角色写入。</p>
+	 */
+	@Getter
+	@Setter
+	public static class AdminApi {
 
-		public boolean isAllowPublicClients() {
-			return this.allowPublicClients;
-		}
+		/** 是否启用管理 API 安全链；关闭后 /api/v1/admin/** 将落到普通 Web 链。 */
+		private boolean enabled = true;
 
-		public void setAllowPublicClients(boolean allowPublicClients) {
-			this.allowPublicClients = allowPublicClients;
-		}
+		/** 管理控制台自身的 client_id（V1 迁移已预置）：禁止被删除，避免失去运维入口。 */
+		private String clientId = "mao-app-admin";
 
-		public boolean isCorsEnabled() {
-			return this.corsEnabled;
-		}
+		/** 访问管理 API 所需角色（对应 roles 表的 code，大写比较）。 */
+		private String requiredRole = "ADMIN";
 
-		public void setCorsEnabled(boolean corsEnabled) {
-			this.corsEnabled = corsEnabled;
-		}
-
-		public List<String> getCorsAllowedOrigins() {
-			return this.corsAllowedOrigins;
-		}
-
-		public void setCorsAllowedOrigins(List<String> corsAllowedOrigins) {
-			this.corsAllowedOrigins = corsAllowedOrigins;
-		}
+		/** 允许跨域调用管理 API 的前端来源（管理控制台）。 */
+		private List<String> corsAllowedOrigins = new ArrayList<>(List.of("*"));
 
 	}
 

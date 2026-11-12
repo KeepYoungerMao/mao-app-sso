@@ -41,7 +41,10 @@ public class LoginSuccessHandler extends SavedRequestAwareAuthenticationSuccessH
 
 	private final RequestCache requestCache = new HttpSessionRequestCache();
 
-	public LoginSuccessHandler() {
+	private final com.mao.sso.user.UserService userService;
+
+	public LoginSuccessHandler(com.mao.sso.user.UserService userService) {
+		this.userService = userService;
 		setDefaultTargetUrl("/");
 		setAlwaysUseDefaultTargetUrl(false);
 		setRequestCache(this.requestCache);
@@ -56,9 +59,36 @@ public class LoginSuccessHandler extends SavedRequestAwareAuthenticationSuccessH
 			log.warn("拦截不安全的登录跳转目标: {}", targetUrl);
 			targetUrl = "/";
 		}
+		recordLogin(authentication);
+		// must_change_password 是「软」标记：不阻断登录，但在没有待恢复的授权请求时
+		// 引导用户先去改密，避免初始密码被长期沿用。
+		if ("/".equals(targetUrl) && mustChangePassword(authentication)) {
+			targetUrl = "/profile?passwordChangeRequired=true";
+		}
 		log.info("登录成功: username={} 跳转目标: {}", authentication.getName(), targetUrl);
 		getRedirectStrategy().sendRedirect(request, response, targetUrl);
 		clearAuthenticationAttributes(request);
+	}
+
+	/** 记录最后登录时间；失败不影响登录主流程。 */
+	private void recordLogin(Authentication authentication) {
+		try {
+			this.userService.recordLogin(authentication.getName());
+		}
+		catch (RuntimeException ex) {
+			log.warn("记录登录时间失败: username={} reason={}", authentication.getName(), ex.getMessage());
+		}
+	}
+
+	private boolean mustChangePassword(Authentication authentication) {
+		try {
+			return this.userService.findByUsername(authentication.getName())
+				.map(com.mao.sso.user.User::isMustChangePassword)
+				.orElse(false);
+		}
+		catch (RuntimeException ex) {
+			return false;
+		}
 	}
 
 	private String resolveTargetUrl(HttpServletRequest request, HttpServletResponse response) {

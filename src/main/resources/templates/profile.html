@@ -10,6 +10,9 @@
     <h1 id="profile-title">个人资料</h1>
 
     <div th:if="${successMessage}" class="alert alert-success" role="status" th:text="${successMessage}">操作成功</div>
+    <div th:if="${passwordChangeRequired}" class="alert alert-error" role="alert">
+      管理员要求您修改初始密码，请先完成密码修改后再继续使用。
+    </div>
 
     <h2>账户信息</h2>
     <dl class="info-grid">
@@ -17,6 +20,8 @@
       <dd th:text="${user.username}">username</dd>
       <dt>邮箱</dt>
       <dd th:text="${user.email}">user@example.com</dd>
+      <dt>手机号</dt>
+      <dd th:text="${user.phone != null and !user.phone.isEmpty()} ? ${user.phone} : '未绑定'">未绑定</dd>
       <dt>角色</dt>
       <dd>
         <span class="badge" th:each="role : ${user.roles}" th:text="${role.code}">ROLE_USER</span>
@@ -30,6 +35,10 @@
         <span class="badge" th:classappend="${user.credentialsExpired} ? 'badge-danger' : 'badge-success'"
               th:text="${user.credentialsExpired} ? '密码已过期' : '密码有效'">密码有效</span>
       </dd>
+      <dt>密码有效期</dt>
+      <dd th:text="${user.credentialsExpiredAt != null} ? ${#temporals.format(user.credentialsExpiredAt, 'yyyy-MM-dd HH:mm:ss')} : '永不过期'">永不过期</dd>
+      <dt>上次登录</dt>
+      <dd th:text="${user.lastLoginAt != null} ? ${#temporals.format(user.lastLoginAt, 'yyyy-MM-dd HH:mm:ss')} : '—'">—</dd>
       <dt>注册时间</dt>
       <dd th:text="${#temporals.format(user.createdAt, 'yyyy-MM-dd HH:mm:ss')}">2026-01-01 00:00:00</dd>
     </dl>
@@ -55,6 +64,42 @@
       </div>
 
       <button type="submit" class="button primary">保存</button>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="password-form-title">
+    <h2 id="password-form-title">修改密码</h2>
+
+    <div th:if="${#fields.hasErrors('passwordForm.*')}" class="alert alert-error" role="alert">
+      <ul class="error-list">
+        <li th:each="err : ${#fields.errors('passwordForm.*')}" th:text="${err}">校验错误</li>
+      </ul>
+    </div>
+
+    <form th:action="@{/profile/password}" th:object="${passwordForm}" method="post" novalidate>
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+      <div class="form-field">
+        <label for="currentPassword">当前密码</label>
+        <input type="password" id="currentPassword" th:field="*{currentPassword}" autocomplete="current-password"
+               required th:errorclass="field-error">
+      </div>
+
+      <div class="form-field">
+        <label for="newPassword">新密码</label>
+        <input type="password" id="newPassword" th:field="*{newPassword}" autocomplete="new-password"
+               minlength="8" maxlength="64" required aria-describedby="newPassword-help"
+               th:errorclass="field-error">
+        <p id="newPassword-help" class="muted small">8-64 位。修改成功后，管理员设置的「需改密」标记将自动清除。</p>
+      </div>
+
+      <div class="form-field">
+        <label for="confirmPassword">确认新密码</label>
+        <input type="password" id="confirmPassword" th:field="*{confirmPassword}" autocomplete="new-password"
+               minlength="8" maxlength="64" required th:errorclass="field-error">
+      </div>
+
+      <button type="submit" class="button primary">修改密码</button>
     </form>
   </section>
 </main>

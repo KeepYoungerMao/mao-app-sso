@@ -9,7 +9,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.mao.sso.user.UserRepository;
+import com.mao.sso.user.mapper.UserMapper;
 
 /**
  * 基于数据库的 UserDetailsService。用户名或邮箱均可登录。
@@ -25,31 +25,41 @@ import com.mao.sso.user.UserRepository;
  * <p>因此 Principal 使用内置 User，业务属性（id/email/displayName）在需要时
  * 按用户名查询数据库获得（见 JwtClaimsCustomizer 与各 Controller）。</p>
  *
+ * <h3>四个账户状态位的来源</h3>
+ * <ul>
+ *   <li>{@code enabled} / {@code accountLocked} / {@code accountExpired}：直接取自用户表；</li>
+ *   <li>{@code credentialsExpired}：由 {@code credentials_expired_at} 派生
+ *       （为空表示永不过期）——密码到期后登录直接被拒绝。</li>
+ * </ul>
+ *
  * <p>注意：认证失败信息不区分“用户不存在”与“密码错误”，
  * 由登录失败处理器统一返回通用提示，防止用户枚举。</p>
  */
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-	private final UserRepository userRepository;
+	private final UserMapper userMapper;
 
-	public UserDetailsServiceImpl(UserRepository userRepository) {
-		this.userRepository = userRepository;
+	public UserDetailsServiceImpl(UserMapper userMapper) {
+		this.userMapper = userMapper;
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 		String identifier = (username == null) ? "" : username.trim();
-		return this.userRepository.findByIdentifierWithRoles(identifier)
+		return this.userMapper.findByIdentifierWithRoles(identifier)
 			.map((user) -> User.withUsername(user.getUsername())
 				.password(user.getPasswordHash())
 				.disabled(!user.isEnabled())
 				.accountLocked(user.isAccountLocked())
 				.accountExpired(user.isAccountExpired())
 				.credentialsExpired(user.isCredentialsExpired())
-				.authorities(user.getRoles().stream()
-					.map((role) -> (GrantedAuthority) new SimpleGrantedAuthority(role.getCode()))
+				.authorities(user.getRoleCodes().stream()
+					// 角色 code 全小写存储（admin / customer），Spring Security 侧统一加
+					// ROLE_ 前缀并大写，使 hasRole("ADMIN") 与 hasAuthority("ROLE_ADMIN") 都成立。
+					.map((code) -> (GrantedAuthority) new SimpleGrantedAuthority(
+							"ROLE_" + code.toUpperCase(java.util.Locale.ROOT)))
 					.toList())
 				.build())
 			.orElseThrow(() -> new UsernameNotFoundException("用户不存在或凭据无效"));

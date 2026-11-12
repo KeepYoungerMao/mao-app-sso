@@ -27,8 +27,6 @@
       </dl>
       <div class="button-group">
         <a class="button secondary" th:href="@{/profile}">个人资料</a>
-        <a sec:authorize="hasRole('ROLE_ADMIN')" class="button secondary" th:href="@{/admin/users}">用户管理</a>
-        <a sec:authorize="hasRole('ROLE_ADMIN')" class="button secondary" th:href="@{/admin/clients}">客户端管理</a>
       </div>
     </div>
 

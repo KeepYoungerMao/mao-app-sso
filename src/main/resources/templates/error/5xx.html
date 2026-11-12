@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head th:replace="~{fragments/layout :: head('服务器错误 - mao-app-sso')}"></head>
+<body>
+
+<nav th:replace="~{fragments/layout :: navbar('')}"></nav>
+
+<main class="page-container narrow">
+  <section class="card" aria-labelledby="error-title">
+    <h1 id="error-title">服务器开小差了</h1>
+    <div class="alert alert-error" role="alert">
+      <p>系统处理请求时发生错误，请稍后重试。</p>
+    </div>
+    <p class="muted">如果问题持续存在，请联系管理员并提供访问时间与操作路径。</p>
+    <a class="button primary" th:href="@{/}">返回首页</a>
+  </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+
+</body>
+</html>

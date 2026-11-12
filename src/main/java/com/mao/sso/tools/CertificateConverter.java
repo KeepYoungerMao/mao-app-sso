@@ -14,22 +14,22 @@ import java.util.Base64;
  * <pre>{@code
  * // 1. 生成 truststore（验证服务器证书用）
  * CertificateConverter.builder()
- *         .caCert(Paths.get("certs/ca.pem"))
- *         .output(Paths.get("certs/truststore.p12"))
+ *         .caCert(Paths.get("D:/certs/mysql/ca.pem"))
+ *         .output(Paths.get("D:/certs/mysql/truststore.p12"))
  *         .password("changeit")
  *         .buildTrustStore();
  *
  * // 2. 生成 keystore（双向认证用）
  * CertificateConverter.builder()
- *         .clientCert(Paths.get("certs/client-cert.pem"))
- *         .clientKey(Paths.get("certs/client-key.pem"))
- *         .output(Paths.get("certs/client-keystore.p12"))
+ *         .clientCert(Paths.get("D:/certs/mysql/client-cert.pem"))
+ *         .clientKey(Paths.get("D:/certs/mysql/client-key.pem"))
+ *         .output(Paths.get("D:/certs/mysql/client-keystore.p12"))
  *         .password("changeit")
  *         .buildKeyStore();
  * }</pre>
  *
  * 不用该工具类，可以使用命令行执行：
- * # 在 PowerShell 中执行，进入项目 resources/certs 目录
+ * # 在 PowerShell 中执行，进入证书目录 D:/certs/mysql（证书不入库，apps 通过环境变量指向）
  * # 1. 生成 truststore（信任证书库，用于验证服务器）
  * keytool -importcert -alias MySQLCACert -file ca.pem -keystore truststore.jks -storepass maoappsso -noprompt
  * # 2. 如果要做双向认证，还需要生成 keystore（客户端身份证书）
@@ -221,7 +221,9 @@ public final class CertificateConverter {
     // ───────────────────────── main（独立测试入口） ─────────────────────────
 
     public static void main(String[] args) {
-        Path certsDir = Paths.get("src/main/resources/certs");
+        // 证书不放在仓库里：pem 与 p12 统一放在本机目录，由 application.yml 的
+        // SSO_DB_TRUSTSTORE_URL / SSO_DB_KEYSTORE_URL 指向
+        Path certsDir = Paths.get("D:/certs/mysql");
 
         // 1. 生成 truststore
         builder()

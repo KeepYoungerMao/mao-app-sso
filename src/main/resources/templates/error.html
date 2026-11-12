@@ -7,9 +7,14 @@
 
 <main class="page-container narrow">
   <section class="card" aria-labelledby="error-title">
-    <h1 id="error-title">出错了</h1>
+    <h1 id="error-title">出错了 <span class="muted" th:if="${status != null}" th:text="'(' + ${status} + ')'"></span></h1>
+    <!--
+      最终兜底页：只有 templates/error/4xx.html 与 5xx.html 都不可用时才会渲染到这里
+      （BasicErrorController 的 view name 兜底）。此处刻意不读 error / message 属性，
+      容器路径下它们是英文 reason phrase，展示出来只会更糟。
+    -->
     <div class="alert alert-error" role="alert">
-      <p th:text="${errorMessage ?: '服务器处理请求时发生错误，请稍后重试。'}">错误信息</p>
+      <p>系统处理请求时发生错误，请稍后重试。</p>
     </div>
     <p class="muted">如果问题持续存在，请联系管理员并提供访问时间与操作路径。</p>
     <a class="button primary" th:href="@{/}">返回首页</a>

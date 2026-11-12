@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mao.sso.user.mapper.UserMapper">
+
+    <!-- 基础字段映射：全部显式声明，不依赖 autoMapping（列名与属性名并非一一对应） -->
+    <resultMap id="userMap" type="com.mao.sso.user.User">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="email" property="email"/>
+        <result column="phone" property="phone"/>
+        <result column="avatar" property="avatar"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="display_name" property="displayName"/>
+        <result column="enabled" property="enabled"/>
+        <result column="account_locked" property="accountLocked"/>
+        <result column="account_expired" property="accountExpired"/>
+        <result column="last_login_at" property="lastLoginAt"/>
+        <result column="must_change_password" property="mustChangePassword"/>
+        <result column="credentials_expired_at" property="credentialsExpiredAt"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- 详情映射：一次 join 抓取用户 + 角色（不用于分页，避免 join 截断角色行） -->
+    <resultMap id="userWithRolesMap" type="com.mao.sso.user.User" extends="userMap">
+        <collection property="roles" ofType="com.mao.sso.user.Role" columnPrefix="r_">
+            <id column="id" property="id"/>
+            <result column="code" property="code"/>
+            <result column="name" property="name"/>
+            <result column="description" property="description"/>
+        </collection>
+    </resultMap>
+
+    <sql id="userColumns">
+        u.id, u.username, u.email, u.phone, u.avatar, u.password_hash, u.display_name,
+        u.enabled, u.account_locked, u.account_expired, u.last_login_at,
+        u.must_change_password, u.credentials_expired_at,
+        u.created_by, u.updated_by, u.created_at, u.updated_at
+    </sql>
+
+    <sql id="roleColumns">
+        r.id AS r_id, r.code AS r_code, r.name AS r_name, r.description AS r_description
+    </sql>
+
+    <sql id="withRolesFrom">
+        FROM users u
+        LEFT JOIN user_roles ur ON ur.user_id = u.id
+        LEFT JOIN roles r ON r.id = ur.role_id
+    </sql>
+
+    <sql id="pageWhere">
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (u.username LIKE CONCAT('%', #{keyword}, '%')
+                OR u.email LIKE CONCAT('%', #{keyword}, '%')
+                OR u.display_name LIKE CONCAT('%', #{keyword}, '%')
+                OR u.phone LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="enabled != null">
+                AND u.enabled = #{enabled}
+            </if>
+            <if test="locked != null">
+                AND u.account_locked = #{locked}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findById" resultMap="userMap">
+        SELECT <include refid="userColumns"/>
+        FROM users u
+        WHERE u.id = #{id}
+    </select>
+
+    <select id="findByUsername" resultMap="userMap">
+        SELECT <include refid="userColumns"/>
+        FROM users u
+        WHERE u.username = #{username}
+    </select>
+
+    <select id="findByIdWithRoles" resultMap="userWithRolesMap">
+        SELECT <include refid="userColumns"/>, <include refid="roleColumns"/>
+        <include refid="withRolesFrom"/>
+        WHERE u.id = #{id}
+        ORDER BY r.code
+    </select>
+
+    <select id="findByUsernameWithRoles" resultMap="userWithRolesMap">
+        SELECT <include refid="userColumns"/>, <include refid="roleColumns"/>
+        <include refid="withRolesFrom"/>
+        WHERE u.username = #{username}
+        ORDER BY r.code
+    </select>
+
+    <select id="findByIdentifierWithRoles" resultMap="userWithRolesMap">
+        SELECT <include refid="userColumns"/>, <include refid="roleColumns"/>
+        <include refid="withRolesFrom"/>
+        WHERE u.username = #{identifier} OR u.email = #{identifier}
+        ORDER BY r.code
+    </select>
+
+    <select id="findAllWithRoles" resultMap="userWithRolesMap">
+        SELECT <include refid="userColumns"/>, <include refid="roleColumns"/>
+        <include refid="withRolesFrom"/>
+        ORDER BY u.id, r.code
+    </select>
+
+    <select id="selectPage" resultMap="userMap">
+        SELECT <include refid="userColumns"/>
+        FROM users u
+        <include refid="pageWhere"/>
+        ORDER BY u.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        FROM users u
+        <include refid="pageWhere"/>
+    </select>
+
+    <resultMap id="userRoleRowMap" type="com.mao.sso.user.mapper.UserRoleRow">
+        <result column="user_id" property="userId"/>
+        <result column="role_id" property="roleId"/>
+        <result column="role_code" property="roleCode"/>
+        <result column="role_name" property="roleName"/>
+    </resultMap>
+
+    <select id="findRolesByUserIds" resultMap="userRoleRowMap">
+        SELECT ur.user_id AS user_id, r.id AS role_id, r.code AS role_code, r.name AS role_name
+        FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY r.code
+    </select>
+
+    <select id="countByUsername" resultType="long">
+        SELECT COUNT(*) FROM users
+        WHERE username = #{username}
+        <if test="excludeId != null">AND id &lt;&gt; #{excludeId}</if>
+    </select>
+
+    <select id="countByEmail" resultType="long">
+        SELECT COUNT(*) FROM users
+        WHERE email = #{email}
+        <if test="excludeId != null">AND id &lt;&gt; #{excludeId}</if>
+    </select>
+
+    <select id="countActiveAdmins" resultType="long">
+        SELECT COUNT(DISTINCT u.id)
+        FROM users u
+        JOIN user_roles ur ON ur.user_id = u.id
+        JOIN roles r ON r.id = ur.role_id
+        WHERE r.code = 'admin'
+          AND u.enabled = TRUE
+          AND u.account_locked = FALSE
+        <if test="excludeId != null">AND u.id &lt;&gt; #{excludeId}</if>
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM users
+    </select>
+
+    <insert id="insert" parameterType="com.mao.sso.user.User"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO users (username, email, phone, avatar, password_hash, display_name,
+                           enabled, account_locked, account_expired, last_login_at,
+                           must_change_password, credentials_expired_at, created_by, updated_by)
+        VALUES (#{username}, #{email}, #{phone}, #{avatar}, #{passwordHash}, #{displayName},
+                #{enabled}, #{accountLocked}, #{accountExpired}, #{lastLoginAt},
+                #{mustChangePassword}, #{credentialsExpiredAt}, #{createdBy}, #{updatedBy})
+    </insert>
+
+    <update id="updateProfile">
+        UPDATE users
+        SET email = #{email},
+            phone = #{phone},
+            avatar = #{avatar},
+            display_name = #{displayName},
+            updated_by = #{updatedBy},
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{id}
+    </update>
+
+    <update id="updatePassword">
+        UPDATE users
+        SET password_hash = #{passwordHash},
+            must_change_password = #{mustChangePassword},
+            updated_by = #{updatedBy},
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE users
+        SET enabled = #{enabled},
+            account_locked = #{accountLocked},
+            updated_by = #{updatedBy},
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateCredentialsExpiredAt">
+        UPDATE users
+        SET credentials_expired_at = #{credentialsExpiredAt},
+            updated_by = #{updatedBy},
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateLastLoginAt">
+        UPDATE users SET last_login_at = #{lastLoginAt} WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM users WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteUserRoles">
+        DELETE FROM user_roles WHERE user_id = #{userId}
+    </delete>
+
+    <insert id="insertUserRoles">
+        INSERT INTO user_roles (user_id, role_id) VALUES
+        <foreach collection="roleIds" item="roleId" separator=",">
+            (#{userId}, #{roleId})
+        </foreach>
+    </insert>
+
+</mapper>

@@ -249,7 +249,7 @@ class OAuthNegativeFlowTest extends IntegrationTestSupport {
 				REDIRECT_URI, false, "openid");
 		String username = "anonok-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		PkcePair pkce = generatePkce();
 		String state = "st-" + UUID.randomUUID();
 

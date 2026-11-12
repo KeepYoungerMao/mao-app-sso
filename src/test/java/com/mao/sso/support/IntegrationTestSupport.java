@@ -5,9 +5,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
+import org.flywaydb.core.Flyway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.MySQLContainer;
 
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -15,66 +15,68 @@ import org.springframework.test.context.DynamicPropertySource;
 /**
  * 集成测试基类。
  *
- * <h3>数据库策略</h3>
+ * <h3>数据库策略（已移除 H2 与 Testcontainers）</h3>
+ * <p>直接连接本地 MySQL 测试库，默认
+ * {@code jdbc:mysql://127.0.0.1:3306/mao_sso_test}，可通过环境变量覆盖：</p>
  * <ul>
- *   <li>优先使用 Testcontainers MySQL（与生产数据库完全一致）；</li>
- *   <li>当前环境无 Docker 时自动回退到 H2（MySQL 兼容模式），
- *       保证同样的集成测试可在任意环境执行；回退时打印 WARN 日志。</li>
+ *   <li>{@code SSO_TEST_DATASOURCE_URL}</li>
+ *   <li>{@code SSO_TEST_DATASOURCE_USERNAME}（默认 root）</li>
+ *   <li>{@code SSO_TEST_DATASOURCE_PASSWORD}（默认 root）</li>
  * </ul>
  *
- * <p>所有测试共享同一个 Spring 上下文与数据库（容器/内存库仅启动一次）。</p>
+ * <p><b>安全护栏</b>：启动前会执行 Flyway {@code clean + migrate} 重置库结构，
+ * 因此要求 URL 中的库名必须包含 {@code test}，防止误连开发/生产库造成数据丢失。</p>
  */
 public abstract class IntegrationTestSupport {
 
 	protected static final Logger log = LoggerFactory.getLogger(IntegrationTestSupport.class);
 
-	private static MySQLContainer<?> mysqlContainer;
+	private static final String DEFAULT_URL = "jdbc:mysql://127.0.0.1:3306/mao_sso_test"
+			+ "?createDatabaseIfNotExist=true&preserveInstants=true&connectionTimeZone=UTC"
+			+ "&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&sslMode=DISABLED";
+
+	private static final String URL = env("SSO_TEST_DATASOURCE_URL", DEFAULT_URL);
+
+	private static final String USERNAME = env("SSO_TEST_DATASOURCE_USERNAME", "root");
+
+	private static final String PASSWORD = env("SSO_TEST_DATASOURCE_PASSWORD", "root");
 
 	static {
-		if (isDockerAvailable()) {
-			mysqlContainer = new MySQLContainer<>("mysql:8.0");
-			mysqlContainer.start();
-			log.info("Testcontainers MySQL 已启动: {}", mysqlContainer.getJdbcUrl());
-		}
-		else {
-			log.warn("================================================================");
-			log.warn("未检测到 Docker 环境，集成测试回退到 H2（MySQL 兼容模式）。");
-			log.warn("生产与 CI（有 Docker）环境仍使用 Testcontainers MySQL，行为一致。");
-			log.warn("================================================================");
-		}
+		resetDatabase();
 	}
 
-	protected static boolean isMySql() {
-		return mysqlContainer != null;
+	private static String env(String key, String defaultValue) {
+		String value = System.getenv(key);
+		return (value != null && !value.isBlank()) ? value : defaultValue;
+	}
+
+	/**
+	 * 重置测试库：Flyway clean（清空所有对象）后重新执行迁移，保证测试从确定状态开始。
+	 */
+	private static void resetDatabase() {
+		String lower = URL.toLowerCase();
+		if (!lower.contains("test")) {
+			throw new IllegalStateException(
+					"拒绝在非测试库上执行 clean：SSO_TEST_DATASOURCE_URL=" + URL + "（库名必须包含 test）");
+		}
+		Flyway flyway = Flyway.configure()
+			.dataSource(URL, USERNAME, PASSWORD)
+			.locations("classpath:db/migration")
+			.cleanDisabled(false)
+			.load();
+		flyway.clean();
+		flyway.migrate();
+		log.info("测试数据库已重置（clean + migrate）: {}", URL);
 	}
 
 	@DynamicPropertySource
 	static void datasourceProperties(DynamicPropertyRegistry registry) {
-		if (mysqlContainer != null) {
-			// 追加 Instant 存取参数（Spring Authorization Server 官方 schema 对 MySQL 的要求）
-			String url = mysqlContainer.getJdbcUrl()
-					+ "&preserveInstants=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true";
-			registry.add("spring.datasource.url", () -> url);
-			registry.add("spring.datasource.username", mysqlContainer::getUsername);
-			registry.add("spring.datasource.password", mysqlContainer::getPassword);
-			registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
-		}
-		else {
-			registry.add("spring.datasource.url",
-					() -> "jdbc:h2:mem:maosso;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE");
-			registry.add("spring.datasource.username", () -> "sa");
-			registry.add("spring.datasource.password", () -> "");
-			registry.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
-		}
-	}
-
-	private static boolean isDockerAvailable() {
-		try {
-			return org.testcontainers.DockerClientFactory.instance().isDockerAvailable();
-		}
-		catch (Throwable ex) {
-			return false;
-		}
+		registry.add("spring.datasource.url", () -> URL);
+		registry.add("spring.datasource.username", () -> USERNAME);
+		registry.add("spring.datasource.password", () -> PASSWORD);
+		registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+		registry.add("spring.flyway.enabled", () -> "true");
+		registry.add("spring.flyway.clean-disabled", () -> "false");
 	}
 
 	// ---------- PKCE 工具 ----------

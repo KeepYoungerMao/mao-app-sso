@@ -57,7 +57,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 	void loginSuccessAndAccessProtectedPage() throws Exception {
 		String username = "login-ok-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 
 		MockHttpSession session = new MockHttpSession();
 		this.mockMvc.perform(post("/login")
@@ -78,14 +78,42 @@ class LoginFlowTest extends IntegrationTestSupport {
 	@DisplayName("密码错误时登录失败（通用提示，不区分原因）")
 	void loginFailsWithWrongPassword() throws Exception {
 		String username = "login-badpwd-" + UUID.randomUUID().toString().substring(0, 6);
-		TestDataFactory.createUser(this.userService, this.passwordEncoder, username, UserService.ROLE_USER);
+		TestDataFactory.createUser(this.userService, this.passwordEncoder, username, UserService.ROLE_CUSTOMER);
 
 		this.mockMvc.perform(post("/login")
 			.param("username", username)
 			.param("password", "DefinitelyWrong123")
 			.with(csrf()))
 			.andExpect(status().is3xxRedirection())
-			.andExpect(redirectedUrl("/login?error"));
+			.andExpect(redirectedUrl("/login?error=true"));
+	}
+
+	@Test
+	@DisplayName("登录失败后跟到登录页：渲染错误提示，而不是 5xx 错误页")
+	void loginFailureRedirectRendersLoginPageWithError() throws Exception {
+		this.mockMvc.perform(post("/login")
+			.param("username", "no-such-user-" + UUID.randomUUID().toString().substring(0, 6))
+			.param("password", "DefinitelyWrong123")
+			.with(csrf()))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/login?error=true"));
+
+		// 关键：真的跟到 /login 去渲染一次。只断言重定向 URL 会漏掉
+		// 参数解析阶段的故障（曾因 boolean 参数 + ?error 空值打成 500）
+		this.mockMvc.perform(get("/login").param("error", "true"))
+			.andExpect(status().isOk())
+			.andExpect(view().name("login"))
+			.andExpect(model().attribute("errorMessage", "用户名或密码错误，请重试"))
+			.andExpect(content().string(org.hamcrest.Matchers.containsString("用户名或密码错误")));
+	}
+
+	@Test
+	@DisplayName("登录页容忍无值的标记参数：/login?error 不报错")
+	void loginPageToleratesValuelessFlags() throws Exception {
+		// 这两个参数只表示「发生过该事件」，值无意义。外部手工拼 URL 时很可能是无值形式
+		this.mockMvc.perform(get("/login").param("error", "").param("logout", ""))
+			.andExpect(status().isOk())
+			.andExpect(view().name("login"));
 	}
 
 	@Test
@@ -96,7 +124,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 			.param("password", "Whatever123")
 			.with(csrf()))
 			.andExpect(status().is3xxRedirection())
-			.andExpect(redirectedUrl("/login?error"));
+			.andExpect(redirectedUrl("/login?error=true"));
 	}
 
 	@Test
@@ -104,7 +132,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 	void disabledUserCannotLogin() throws Exception {
 		String username = "login-disabled-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		var user = this.userService.findByUsername(username).orElseThrow();
 		this.userService.updateStatus(user.getId(), false, false);
 
@@ -113,7 +141,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 			.param("password", password)
 			.with(csrf()))
 			.andExpect(status().is3xxRedirection())
-			.andExpect(redirectedUrl("/login?error"));
+			.andExpect(redirectedUrl("/login?error=true"));
 
 		this.mockMvc.perform(get("/profile"))
 			.andExpect(status().is3xxRedirection())
@@ -125,7 +153,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 	void lockedUserCannotLogin() throws Exception {
 		String username = "login-locked-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		var user = this.userService.findByUsername(username).orElseThrow();
 		this.userService.updateStatus(user.getId(), true, true);
 
@@ -134,7 +162,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 			.param("password", password)
 			.with(csrf()))
 			.andExpect(status().is3xxRedirection())
-			.andExpect(redirectedUrl("/login?error"));
+			.andExpect(redirectedUrl("/login?error=true"));
 	}
 
 	@Test
@@ -142,7 +170,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 	void loginWithEmail() throws Exception {
 		String username = "login-email-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 
 		this.mockMvc.perform(post("/login")
 			.param("username", username + "@mao.local")
@@ -157,7 +185,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 	void loginWithoutCsrfTokenIsRejected() throws Exception {
 		String username = "login-csrf-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 
 		this.mockMvc.perform(post("/login")
 			.param("username", username)
@@ -174,30 +202,11 @@ class LoginFlowTest extends IntegrationTestSupport {
 	}
 
 	@Test
-	@DisplayName("普通用户访问管理页面返回 403（权限不足）")
-	void normalUserGetsForbiddenOnAdminPage() throws Exception {
-		String username = "login-noadmin-" + UUID.randomUUID().toString().substring(0, 6);
-		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
-
-		MockHttpSession session = new MockHttpSession();
-		this.mockMvc.perform(post("/login")
-			.param("username", username)
-			.param("password", password)
-			.with(csrf())
-			.session(session))
-			.andExpect(status().is3xxRedirection());
-
-		this.mockMvc.perform(get("/admin/users").session(session))
-			.andExpect(status().isForbidden());
-	}
-
-	@Test
-	@DisplayName("管理员可以访问管理页面")
-	void adminCanAccessAdminPage() throws Exception {
+	@DisplayName("管理 API 不接受会话认证：无 Bearer Token 一律 401")
+	void adminApiRequiresBearerToken() throws Exception {
 		String username = "login-admin-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_ADMIN, UserService.ROLE_USER);
+				UserService.ROLE_ADMIN, UserService.ROLE_CUSTOMER);
 
 		MockHttpSession session = new MockHttpSession();
 		this.mockMvc.perform(post("/login")
@@ -207,9 +216,12 @@ class LoginFlowTest extends IntegrationTestSupport {
 			.session(session))
 			.andExpect(status().is3xxRedirection());
 
-		this.mockMvc.perform(get("/admin/users").session(session))
-			.andExpect(status().isOk())
-			.andExpect(view().name("admin-users"));
+		// 即便会话身份是管理员，管理 API 走的是独立资源服务器链，只认 Bearer Token
+		this.mockMvc
+			.perform(post("/api/v1/admin/user/page").session(session)
+				.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+				.content("{}"))
+			.andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -217,7 +229,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 	void logoutInvalidatesSession() throws Exception {
 		String username = "login-logout-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 
 		MockHttpSession session = new MockHttpSession();
 		this.mockMvc.perform(post("/login")
@@ -284,7 +296,7 @@ class LoginFlowTest extends IntegrationTestSupport {
 	void unsafeRedirectParameterIsRejected() throws Exception {
 		String username = "login-redir-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 
 		this.mockMvc.perform(post("/login")
 			.param("username", username)

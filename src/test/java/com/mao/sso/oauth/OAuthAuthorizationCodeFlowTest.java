@@ -63,10 +63,10 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 	void fullAuthorizationCodeFlowWithPkce() throws Exception {
 		String clientId = "flow-" + UUID.randomUUID().toString().substring(0, 8);
 		String clientSecret = TestDataFactory.createConfidentialClient(this.registeredClientRepository,
-				this.passwordEncoder, clientId, REDIRECT_URI, true, "openid", "profile", "email");
+				this.passwordEncoder, clientId, REDIRECT_URI, true, "openid", "profile");
 		String username = "flow-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		String state = "st-" + UUID.randomUUID();
 		PkcePair pkce = generatePkce();
 
@@ -75,7 +75,7 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 		this.mockMvc.perform(get("/oauth2/authorize")
 			.param("response_type", "code")
 			.param("client_id", clientId)
-			.param("scope", "openid profile email")
+			.param("scope", "openid profile")
 			.param("redirect_uri", REDIRECT_URI)
 			.param("state", state)
 			.param("code_challenge", pkce.codeChallenge())
@@ -104,7 +104,7 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 		MvcResult consentRedirect = this.mockMvc.perform(get("/oauth2/authorize")
 			.param("response_type", "code")
 			.param("client_id", clientId)
-			.param("scope", "openid profile email")
+			.param("scope", "openid profile")
 			.param("redirect_uri", REDIRECT_URI)
 			.param("state", state)
 			.param("code_challenge", pkce.codeChallenge())
@@ -123,7 +123,7 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 		// 4) 授权确认页渲染
 		this.mockMvc.perform(get("/oauth2/consent")
 			.param("client_id", clientId)
-			.param("scope", "openid profile email")
+			.param("scope", "openid profile")
 			.param("state", consentState)
 			.session(session))
 			.andExpect(status().isOk())
@@ -135,7 +135,7 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 		MvcResult consentResult = this.mockMvc.perform(post("/oauth2/authorize")
 			.param("client_id", clientId)
 			.param("state", consentState)
-			.param("scope", "openid", "profile", "email")
+			.param("scope", "openid", "profile")
 			.session(session))
 			.andExpect(status().is3xxRedirection())
 			.andReturn();
@@ -167,25 +167,26 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 		assertThat(accessJwt.verify(new com.nimbusds.jose.crypto.RSASSAVerifier(jwk.toRSAPublicKey()))).isTrue();
 		assertThat(accessJwt.getJWTClaimsSet().getSubject()).isEqualTo(username);
 		assertThat(accessJwt.getJWTClaimsSet().getIssuer()).isEqualTo("http://localhost:8080");
-		assertThat(accessJwt.getJWTClaimsSet().getStringListClaim("roles")).contains("ROLE_USER");
+		assertThat(accessJwt.getJWTClaimsSet().getStringListClaim("roles")).contains("customer");
 		assertThat(accessJwt.getJWTClaimsSet().getClaims().keySet())
 			.doesNotContain("password", "password_hash", "email");
 
-		// 8) ID Token 包含 OIDC 标准 Claims
+		// 8) ID Token 包含 OIDC 标准 Claims（仅 openid + profile 两个 scope）
 		SignedJWT idJwt = SignedJWT.parse(tokens.idToken());
 		assertThat(idJwt.verify(new com.nimbusds.jose.crypto.RSASSAVerifier(jwk.toRSAPublicKey()))).isTrue();
 		assertThat(idJwt.getJWTClaimsSet().getAudience()).containsExactly(clientId);
 		assertThat(idJwt.getJWTClaimsSet().getSubject()).isEqualTo(username);
 		assertThat(idJwt.getJWTClaimsSet().getStringClaim("name")).isNotBlank();
-		assertThat(idJwt.getJWTClaimsSet().getStringClaim("email")).isEqualTo(username + "@mao.local");
-		assertThat(idJwt.getJWTClaimsSet().getBooleanClaim("email_verified")).isTrue();
+		assertThat(idJwt.getJWTClaimsSet().getStringClaim("preferred_username")).isEqualTo(username);
+		// 未申请 email scope，因此不得出现邮箱相关 claim
+		assertThat(idJwt.getJWTClaimsSet().getClaims().keySet()).doesNotContain("email", "email_verified");
 
-		// 9) UserInfo 端点
+		// 9) UserInfo 端点（按 scope 裁剪：profile 提供 name，不提供 email）
 		this.mockMvc.perform(get("/userinfo").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokens.accessToken()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.sub").value(username))
 			.andExpect(jsonPath("$.name").isString())
-			.andExpect(jsonPath("$.email").value(username + "@mao.local"));
+			.andExpect(jsonPath("$.email").doesNotExist());
 
 		// 10) Refresh Token 换取新 Token（轮换）
 		MvcResult refreshResult = this.mockMvc.perform(post("/oauth2/token")
@@ -215,7 +216,7 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 				this.passwordEncoder, clientId, REDIRECT_URI, false, "openid");
 		String username = "noconsent-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		String state = "st-" + UUID.randomUUID();
 		PkcePair pkce = generatePkce();
 
@@ -262,7 +263,7 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 				"openid", "profile");
 		String username = "pub-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		String state = "st-" + UUID.randomUUID();
 		PkcePair pkce = generatePkce();
 
@@ -335,7 +336,7 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 				this.passwordEncoder, clientId, REDIRECT_URI, false, "openid");
 		String username = "single-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		PkcePair pkce = generatePkce();
 		String code = obtainAuthorizationCode(clientId, username, password, "openid", pkce, null);
 
@@ -365,7 +366,7 @@ class OAuthAuthorizationCodeFlowTest extends IntegrationTestSupport {
 				this.passwordEncoder, clientId, REDIRECT_URI, false, "openid");
 		String username = "badverifier-user-" + UUID.randomUUID().toString().substring(0, 6);
 		String password = TestDataFactory.createUser(this.userService, this.passwordEncoder, username,
-				UserService.ROLE_USER);
+				UserService.ROLE_CUSTOMER);
 		PkcePair pkce = generatePkce();
 		String code = obtainAuthorizationCode(clientId, username, password, "openid", pkce, null);
 

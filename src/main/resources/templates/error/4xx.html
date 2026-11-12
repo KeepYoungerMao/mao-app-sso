@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head th:replace="~{fragments/layout :: head('请求无法完成 - mao-app-sso')}"></head>
+<body>
+
+<nav th:replace="~{fragments/layout :: navbar('')}"></nav>
+
+<main class="page-container narrow">
+  <section class="card" aria-labelledby="error-title">
+    <!-- 标题按状态码给一句人话，数字只作为排障用的副信息 -->
+    <h1 id="error-title">
+      <span th:switch="${status}">
+        <span th:case="400">请求参数有误</span>
+        <span th:case="401">需要重新登录</span>
+        <span th:case="403">没有访问权限</span>
+        <span th:case="404">页面不存在</span>
+        <span th:case="405">请求方法不支持</span>
+        <span th:case="409">操作存在冲突</span>
+        <span th:case="415">内容类型不支持</span>
+        <span th:case="*">请求无法完成</span>
+      </span>
+      <span class="muted" th:if="${status != null}" th:text="'(' + ${status} + ')'"></span>
+    </h1>
+    <!-- advice 主动渲染时带业务文案；容器 sendError 转发时没有该属性，靠下面的状态说明兜底 -->
+    <div class="alert alert-error" role="alert" th:if="${errorMessage != null}">
+      <p th:text="${errorMessage}">错误信息</p>
+    </div>
+    <p class="muted" th:if="${status == 400}">请检查访问地址、参数或提交的内容后重试。</p>
+    <p class="muted" th:if="${status == 401}">登录状态已失效，请重新登录后继续操作。</p>
+    <p class="muted" th:if="${status == 403}">当前账号没有访问该资源的权限，如有疑问请联系管理员。</p>
+    <p class="muted" th:if="${status == 404}">您访问的页面不存在或已被移除。</p>
+    <p class="muted" th:if="${status == 405}">该地址不支持当前请求方法。</p>
+    <p class="muted" th:if="${status == 415}">请求的内容类型不受支持。</p>
+    <a th:if="${status == 401}" class="button primary" th:href="@{/login}">去登录</a>
+    <a class="button" th:href="@{/}">返回首页</a>
+  </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+
+</body>
+</html>

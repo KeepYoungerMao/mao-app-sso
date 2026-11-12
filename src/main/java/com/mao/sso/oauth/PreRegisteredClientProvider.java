@@ -72,9 +72,20 @@ public final class PreRegisteredClientProvider implements org.springframework.se
 		return buildStandardToken(preRegistered, requestClaims);
 	}
 
+	/**
+	 * 只接管客户端注册请求。
+	 *
+	 * <p><b>注意</b>：本 Provider 通过
+	 * {@code clientRegistrationEndpoint(...).authenticationProviders(...)} 注册，
+	 * 该配置最终落到 {@code HttpSecurity} 全局的 {@link org.springframework.security.authentication.AuthenticationManager}
+	 * 上，也就是授权端点、Token 端点、客户端认证过滤器共用同一个 ProviderManager。
+	 * 因此这里<b>必须</b>精确断言类型：若返回 {@code true}，任何一次客户端认证失败
+	 * 都会被本类的 {@link DcrRejectedException} 覆盖成 {@code invalid_request}，
+	 * 真实错误码（{@code invalid_grant} / {@code invalid_client}）随之丢失。</p>
+	 */
 	@Override
 	public boolean supports(Class<?> authentication) {
-		return true;
+		return OAuth2ClientRegistrationAuthenticationToken.class.isAssignableFrom(authentication);
 	}
 
 	// ---------- 校验 ----------
@@ -137,6 +148,19 @@ public final class PreRegisteredClientProvider implements org.springframework.se
 			if (!"code".equals(responseType)) {
 				throw new DcrRejectedException(OAuth2ErrorCodes.INVALID_REQUEST,
 						"不允许注册的 response_type: " + responseType + "（仅支持 code）");
+			}
+		}
+
+		// token_endpoint_auth_method 由预录入配置决定，请求只能声明与之相符的值，
+		// 否则响应会「宣称一种认证方式、实际按另一种校验」，对客户端是误导。
+		Set<String> allowedMethods = preRegistered.getClientAuthenticationMethods()
+			.stream()
+			.map(m -> m.getValue().toLowerCase())
+			.collect(java.util.stream.Collectors.toSet());
+		for (String method : stringValues(claims.get("token_endpoint_auth_method"))) {
+			if (!allowedMethods.contains(method.toLowerCase())) {
+				throw new DcrRejectedException(OAuth2ErrorCodes.INVALID_REQUEST,
+						"不允许注册的 token_endpoint_auth_method: " + method + "（预录入配置: " + allowedMethods + "）");
 			}
 		}
 	}
