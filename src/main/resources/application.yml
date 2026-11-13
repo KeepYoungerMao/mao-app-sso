@@ -174,7 +174,7 @@ logging:
   level:
     root: INFO                                # 【生产】WARN
     com.mao.sso: DEBUG                        # 【生产】INFO
-    com.mao.sso.user.mapper: DEBUG            # 【生产】INFO（或 WARN，避免打印每条 SQL）
+    com.mao.sso.domain.account.mapper: DEBUG            # 【生产】INFO（或 WARN，避免打印每条 SQL）
     org.springframework.security: INFO        # 【生产】WARN
     # 保持 DEBUG 会输出 MySQL 协议级日志，生产必须降级
     com.mysql.cj.protocol: DEBUG              # 【生产】INFO
@@ -227,7 +227,7 @@ logging:
 #   level:
 #     root: WARN
 #     com.mao.sso: INFO
-#     com.mao.sso.user.mapper: INFO
+#     com.mao.sso.domain.account.mapper: INFO
 #     org.springframework.security: WARN
 #     com.mysql.cj.protocol: INFO
 # ============================================================================

@@ -108,6 +108,20 @@ flowchart LR
 
 拿到管理角色的 Token 也无法借 Cookie 越权，反过来浏览器会话也调不动管理 API。
 
+### 代码结构
+
+包按**对外入口**切分，看包名就知道属于认证服务器还是管理 API：
+
+| 包 | 职责 |
+| --- | --- |
+| `auth` | 认证服务器：协议端点（`/oauth2/**`、`/userinfo`、`/.well-known/**`）、DCR、令牌定制、登录与门户页面 |
+| `api` | 资源服务器：`/api/v1/admin/**`（控制器、DTO、JWT 解码、响应信封） |
+| `domain` | 账号与客户端服务、错误码、分页与审计 —— 被上面两者共用，自己**不依赖**它们 |
+| `tools` | 命令行工具：`JwkGenerator`、`CertificateConverter` |
+
+依赖只允许单向流动（`auth` / `api` → `domain`），`auth` 与 `api` 互不引用。这条边界由
+`ArchitectureTest`（ArchUnit）在构建期强制，误加一个 import 就会构建失败。
+
 ---
 
 ## 快速开始
@@ -205,7 +219,7 @@ V2 迁移预置 `admin` / `Admin@123456`，并置 `must_change_password = true`�
 | 业务错误 | 按 `ErrorCode` 映射 | `{code: 1xxxx, message: "..."}`，无 `data` 字段 |
 | 系统错误 | 500 | `{code: 50000, message: "服务器内部错误"}`（不泄露细节） |
 
-错误码定义在 `exception/ErrorCode.java`（码 + HTTP status + 默认文案绑定一处）：
+错误码定义在 `domain/error/ErrorCode.java`（码 + HTTP status + 默认文案绑定一处）：
 
 | code | HTTP | 含义 |
 | --- | --- | --- |
@@ -350,7 +364,7 @@ Chromium 内核（Edge / Chrome）对**表单 POST 后 302 跳到自定义协议
 不跳转、不报错，表现为「点了同意授权页面毫无反应」（授权码其实已签发）。
 
 因此授权响应要跳到非 `http(s)` 协议时，本项目不直接 302，而是渲染一个中间页
-（`security/CustomSchemeRedirectFilter`），页内给出指向该地址的普通链接，用户点击后浏览器才会
+（`auth/filter/CustomSchemeRedirectFilter`），页内给出指向该地址的普通链接，用户点击后浏览器才会
 唤起系统的「打开应用」弹窗。
 
 - 只拦截 **POST** 产生的重定向；GET 直达授权端点的 302 保持原样（该路径验证可用）。

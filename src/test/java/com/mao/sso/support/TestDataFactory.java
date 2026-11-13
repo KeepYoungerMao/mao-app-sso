@@ -15,8 +15,7 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 
-import com.mao.sso.user.User;
-import com.mao.sso.user.UserService;
+import com.mao.sso.api.user.UserService;
 
 /**
  * 测试数据工厂：创建测试用户与 OAuth 客户端（每次测试使用唯一标识，互不干扰）。

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.mao.sso.user.mapper.UserMapper">
+<mapper namespace="com.mao.sso.domain.mapper.UserMapper">
 
     <!-- 基础字段映射：全部显式声明，不依赖 autoMapping（列名与属性名并非一一对应） -->
-    <resultMap id="userMap" type="com.mao.sso.user.User">
+    <resultMap id="userMap" type="com.mao.sso.domain.account.User">
         <id column="id" property="id"/>
         <result column="username" property="username"/>
         <result column="email" property="email"/>
@@ -25,8 +25,8 @@
     </resultMap>
 
     <!-- 详情映射：一次 join 抓取用户 + 角色（不用于分页，避免 join 截断角色行） -->
-    <resultMap id="userWithRolesMap" type="com.mao.sso.user.User" extends="userMap">
-        <collection property="roles" ofType="com.mao.sso.user.Role" columnPrefix="r_">
+    <resultMap id="userWithRolesMap" type="com.mao.sso.domain.account.User" extends="userMap">
+        <collection property="roles" ofType="com.mao.sso.domain.account.Role" columnPrefix="r_">
             <id column="id" property="id"/>
             <result column="code" property="code"/>
             <result column="name" property="name"/>
@@ -121,7 +121,7 @@
         <include refid="pageWhere"/>
     </select>
 
-    <resultMap id="userRoleRowMap" type="com.mao.sso.user.mapper.UserRoleRow">
+    <resultMap id="userRoleRowMap" type="com.mao.sso.domain.mapper.UserRoleRow">
         <result column="user_id" property="userId"/>
         <result column="role_id" property="roleId"/>
         <result column="role_code" property="roleCode"/>
@@ -166,7 +166,7 @@
         SELECT COUNT(*) FROM users
     </select>
 
-    <insert id="insert" parameterType="com.mao.sso.user.User"
+    <insert id="insert" parameterType="com.mao.sso.domain.account.User"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO users (username, email, phone, avatar, password_hash, display_name,
                            enabled, account_locked, account_expired, last_login_at,

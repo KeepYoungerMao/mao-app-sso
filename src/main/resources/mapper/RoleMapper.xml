@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.mao.sso.user.mapper.RoleMapper">
+<mapper namespace="com.mao.sso.domain.mapper.RoleMapper">
 
-    <resultMap id="roleMap" type="com.mao.sso.user.Role">
+    <resultMap id="roleMap" type="com.mao.sso.domain.account.Role">
         <id column="id" property="id"/>
         <result column="code" property="code"/>
         <result column="name" property="name"/>
@@ -34,7 +34,7 @@
         SELECT COUNT(*) FROM roles
     </select>
 
-    <insert id="insert" parameterType="com.mao.sso.user.Role"
+    <insert id="insert" parameterType="com.mao.sso.domain.account.Role"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO roles (code, name, description, created_by, updated_by)
         VALUES (#{code}, #{name}, #{description}, #{createdBy}, #{updatedBy})
